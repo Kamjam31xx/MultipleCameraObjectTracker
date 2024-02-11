@@ -285,7 +285,7 @@ inline float QuadScore3D(float max, FloatVec3 a, FloatVec3 b, FloatVec3 w, float
 
 
 // float deltaTime, int areaCheckThreshold, float distScale, float posMod, float areaMod, float rectMod, float rectRatioMod, float postModPAR, float discard, float accept
-inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, ColorTrackParams C)
+inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, float dt, ProcessSettings C)
 {
 
 	struct ScoreIdx
@@ -305,13 +305,13 @@ inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, Color
 	{
 		Blob& cur = now.blobs[i];
 		//  per blob  ->  compare against previous blobs
-		if (cur.area >= C.areaThreshold)
+		if (cur.area >= C.areaMinSize)
 		{
 			for (int j = 0; j < last.blobs.size(); j++)
 			{
 				Blob& old = last.blobs[j];
 
-				if (old.area >= C.areaThreshold)
+				if (old.area >= C.areaMinSize)
 				{
 					FloatVec2& centerA = cur.centerOfArea;
 					FloatVec2& centerB = old.centerOfArea;
@@ -329,11 +329,11 @@ inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, Color
 					float wMod = 1.0; // wRatio* aSize.width + 1.0; // fatness fuckers
 					float hMod = 1.0; // hRatio* aSize.height + 1.0; // fatness fuckers brudder
 
-					float posScore = QuadScore2D(posWeight, centerA, centerB, FloatVec2{ wMod , hMod }, C.modPos);
-					float areaScore = QuadScore1D(areaWeight, cur.area, old.area, C.modArea);
-					float rectScore = QuadScore2D(rectWeight, dimA, dimB, FloatVec2{ 1.0,1.0 }, C.modRect);
+					float posScore = QuadScore2D(posWeight, centerA, centerB, FloatVec2{ wMod , hMod }, C.distMod);
+					float areaScore = QuadScore1D(areaWeight, cur.area, old.area, C.areaMod);
+					float rectScore = QuadScore2D(rectWeight, dimA, dimB, FloatVec2{ 1.0,1.0 }, C.rectMod);
 
-					float n = (C.modPost * posScore * (areaScore + rectScore)) + (C.distanceScale * posScore);
+					float n = (C.postMod * posScore * (areaScore + rectScore)) + (C.distScale * posScore);
 
 					// generate vector OR vectors or curve to represent the past path of the blob
 					// v1 - v2 = vector between them
@@ -342,9 +342,9 @@ inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, Color
 
 					// velocity
 					FloatVec2 v1 = FloatVec2{ old.centerOfArea.x - cur.centerOfArea.x, old.centerOfArea.y - cur.centerOfArea.y };
-					float velocity2D = C.dt * sqrt((v1.x * v1.x) + (v1.y * v1.y));
+					float velocity2D = dt * sqrt((v1.x * v1.x) + (v1.y * v1.y));
 
-					if (n > C.discard)
+					if (n > C.discardThreshold)
 					{
 						initialized[i] = true;
 						scores[i].push_back(ScoreIdx{ j, n });
@@ -377,7 +377,7 @@ inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, Color
 					j = score.j;
 
 
-					if (biggest > C.accept)
+					if (biggest > C.acceptThreshold)
 					{
 						break;
 					}

@@ -39,3 +39,27 @@ void log(std::string name, Rectangle in)
 {
 	std::cout << "<" << name << "> " << toLog(in) << std::endl;
 }
+
+
+void logExposure(float input) {
+	log("  < exposure >  :  " + std::to_string(input));
+}
+void logThreshold(float input) {
+	log("  < threshold >  :  " + std::to_string(input));
+}
+void logSetting(std::string name, double value) {
+	log("  < " + name + " >  :  " + std::to_string(value));
+}
+void logSetting(std::string name, float value) {
+	log("  < " + name + " >  :  " + std::to_string(value));
+}
+void logSetting(std::string name, bool value) {
+	std::string valueStr = value ? "true" : "false";
+	log("  < " + name + " > : " + valueStr);
+}
+void logSetting(std::string name, std::string value) {
+	log("  < " + name + " > : " + value);
+}
+void logSetting(std::string name) {
+	log("  < " + name + " >");
+}

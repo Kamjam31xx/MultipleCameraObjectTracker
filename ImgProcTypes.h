@@ -1,6 +1,80 @@
 #pragma once
 
 #include <vector>
+/*struct CapVars {
+	int scale = 2;
+	int width = 2560 / scale;
+	int height = 960 / scale;
+	int exposure = -8.50;
+};
+struct PostProcVars {
+	float minArea = 150;
+	float distanceScale = 1.0;
+	float modPos = 0.1;
+	float modArea = 0.05;
+	float modRect = 0.06;
+	float modPost = 1.0;
+	float ratioModRect = 1.1;
+	float discard = 0.15;
+	float accept = 2.4;
+};
+struct ConvolutionVars {
+	double thresh = 100.0;
+	double threshMax = 255.0;
+	int erosion = 3;
+	int dilation = 3;
+	int sobelThresh = 100;
+	bool sobel = false;
+
+	bool blur = false;
+	bool erode = false;
+	bool dilate = false;
+	bool color = false;
+};
+struct LogVars {
+	float rate = 1.0;
+	float time = 0.0;
+};*/
+
+struct CameraSettings {
+	double exposure = -8.50;
+	int resolutionScale = 2;
+	int width = 2560 / resolutionScale;
+	int height = 960 / resolutionScale;
+};
+
+struct ProcessSettings {
+	float areaMinSize = 150.0;
+	float distScale = 1.0;
+	float distMod = 0.1;
+	float areaMod = 0.05;
+	float rectMod = 0.06;
+	float rectAreaRatioMod = 1.1;
+	float postMod = 1.0;
+	float discardThreshold = 0.15;
+	float acceptThreshold = 2.4;
+	bool wait = false;
+	bool advanceFrame = false;
+	bool frameAdvanced = false;
+	bool blur = false;
+	bool erode = false;
+	bool dilate = false;
+	bool color = false;
+	int cvwait = 1;
+	float cvwaitSlider = 1.0;
+	bool lag = false;
+	bool sobel = false;
+	int sobelThresh = 100;
+	int temporalSteps = 5;
+	int temporalFrames = 10;
+	double threshold = 100.0;
+	double thresholdMax = 255.0;
+	int erosion = 3;
+	int dilation = 3;
+	cv::Size kernelSize{ 3, 3 };
+	float logRate = 1.0;
+	float logTime = 0.0;
+};
 
 /*
 enum direction
@@ -162,18 +236,7 @@ struct BlobFrame
 	std::vector<std::vector<FillNode>> nodes;
 };
 
-struct ColorTrackParams {
-	float dt;
-	int areaThreshold; 
-	float distanceScale; 
-	float modPos; 
-	float modArea; 
-	float modRect; 
-	float modPost; 
-	float ratioModRect;
-	float discard; 
-	float accept;
-};
+
 
 
 struct Chain

@@ -20,12 +20,16 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DeltaTime.cpp" />
+    <ClCompile Include="EntityManager.cpp" />
     <ClCompile Include="FrameRate.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DeltaTime.h" />
+    <ClInclude Include="EntityManager.h" />
     <ClInclude Include="FrameRate.h" />
+    <ClInclude Include="EntityValues.h" />
+    <ClInclude Include="Keyboard.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="ImgProc.h" />
     <ClInclude Include="ImgProcTypes.h" />
