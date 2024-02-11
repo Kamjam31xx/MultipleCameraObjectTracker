@@ -36,6 +36,8 @@ struct LogVars {
 	float time = 0.0;
 };*/
 
+
+
 struct CameraSettings {
 	double exposure = -8.50;
 	int resolutionScale = 2;
@@ -74,6 +76,10 @@ struct ProcessSettings {
 	cv::Size kernelSize{ 3, 3 };
 	float logRate = 1.0;
 	float logTime = 0.0;
+};
+
+struct FittedCurve {
+
 };
 
 /*
@@ -119,7 +125,6 @@ struct Rectangle
 	int xMax;
 	int yMax;
 };
-
 
 
 struct Span

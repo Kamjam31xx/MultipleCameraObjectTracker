@@ -53,34 +53,6 @@ CameraSettings camera = CameraSettings();
 ProcessSettings process = ProcessSettings();
 
 
-/*
-int temporalSteps = 5;
-int temporalFrames = 10;
-
-cv::Size kernelSize(3, 3);
-
-// add areaMin, areaMinPaddingFunction to keep tracking blobs that flip back n forth
-float areaMinSize = 150.0;
-
-
-float distScale = 1.0;
-float distMod = 0.1;
-float areaMod = 0.05;
-float rectMod = 0.06;
-float rectAreaRatioMod = 1.1;
-float postModPosAreaRect = 1.0;
-float discardThreshold = 0.15;
-float acceptThreshold = 2.4;
-
-bool wait = false;
-bool advanceFrame = false;
-bool frameAdvanced = false;
-
-int cvwait = 1;
-float cvwaitSlider = 1.0;
-bool lag = false;*/
-
-
 int main()
 {
 	/*
@@ -115,6 +87,7 @@ int main()
 	std::array<cv::Mat, 2> rightCamera = { cv::Mat(), cv::Mat() };
 	std::array<cv::Mat, 2> leftResult = { cv::Mat(), cv::Mat() };
 	std::array<cv::Mat, 2> rightResult = { cv::Mat(), cv::Mat() };
+
 	Timer.tick();
 	VelocityTimer.tick();
 

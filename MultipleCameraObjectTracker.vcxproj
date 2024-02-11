@@ -29,6 +29,7 @@
     <ClInclude Include="EntityManager.h" />
     <ClInclude Include="FrameRate.h" />
     <ClInclude Include="EntityValues.h" />
+    <ClInclude Include="PolynomialRegression.h" />
     <ClInclude Include="Keyboard.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="ImgProc.h" />

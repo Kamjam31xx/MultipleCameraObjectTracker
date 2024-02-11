@@ -2,7 +2,6 @@
 
 #include "ImgProc.h"
 
-
 void HandleKeyboard(ProcessSettings& _process, CameraSettings& _camera, DeltaTime& _timer, cv::VideoCapture& _cap) {
 
 
