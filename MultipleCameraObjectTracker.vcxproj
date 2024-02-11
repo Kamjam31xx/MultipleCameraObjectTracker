@@ -26,6 +26,7 @@
   <ItemGroup>
     <ClInclude Include="DeltaTime.h" />
     <ClInclude Include="FrameRate.h" />
+    <ClInclude Include="Utils.h" />
     <ClInclude Include="ImgProc.h" />
     <ClInclude Include="ImgProcTypes.h" />
   </ItemGroup>
@@ -91,7 +92,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(OPENCV_DIR)\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(OPENCV_DIR)\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
     <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(OPENCV_DIR)\x64\vc16\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">

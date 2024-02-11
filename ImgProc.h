@@ -21,6 +21,7 @@
 #include "ImgProcTypes.h"
 #include "DeltaTime.h"
 #include "FrameRate.h"
+#include "Utils.h"
 
 bool PointIsInCornerPinRect(CornerPinRect* bounds, int x, int y)
 {
@@ -104,7 +105,7 @@ bool aInB(std::vector<PixelCoord>* a, PixelCoord b)
 	return false;
 }
 
-inline ColorRGBi GetRandomColor()
+inline ColorRGBi RandomColor()
 {
 
 	return ColorRGBi{ rand() % 256 , rand() % 256 , rand() % 256 };
@@ -282,8 +283,11 @@ inline float QuadScore3D(float max, FloatVec3 a, FloatVec3 b, FloatVec3 w, float
 	return max * NormalizedCosBell(g * (x + y + z));
 }
 
-inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, float deltaTime, int areaCheckThreshold, float distScale, float posMod, float areaMod, float rectMod, float rectRatioMod, float postModPAR, float discard, float accept)
+
+// float deltaTime, int areaCheckThreshold, float distScale, float posMod, float areaMod, float rectMod, float rectRatioMod, float postModPAR, float discard, float accept
+inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, ColorTrackParams C)
 {
+
 	struct ScoreIdx
 	{
 		int j;
@@ -301,13 +305,13 @@ inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, float
 	{
 		Blob& cur = now.blobs[i];
 		//  per blob  ->  compare against previous blobs
-		if (cur.area >= areaCheckThreshold)
+		if (cur.area >= C.areaThreshold)
 		{
 			for (int j = 0; j < last.blobs.size(); j++)
 			{
 				Blob& old = last.blobs[j];
 
-				if (old.area >= areaCheckThreshold)
+				if (old.area >= C.areaThreshold)
 				{
 					FloatVec2& centerA = cur.centerOfArea;
 					FloatVec2& centerB = old.centerOfArea;
@@ -325,11 +329,11 @@ inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, float
 					float wMod = 1.0; // wRatio* aSize.width + 1.0; // fatness fuckers
 					float hMod = 1.0; // hRatio* aSize.height + 1.0; // fatness fuckers brudder
 
-					float posScore = QuadScore2D(posWeight, centerA, centerB, FloatVec2{ wMod , hMod }, posMod);
-					float areaScore = QuadScore1D(areaWeight, cur.area, old.area, areaMod);
-					float rectScore = QuadScore2D(rectWeight, dimA, dimB, FloatVec2{ 1.0,1.0 }, rectMod);
+					float posScore = QuadScore2D(posWeight, centerA, centerB, FloatVec2{ wMod , hMod }, C.modPos);
+					float areaScore = QuadScore1D(areaWeight, cur.area, old.area, C.modArea);
+					float rectScore = QuadScore2D(rectWeight, dimA, dimB, FloatVec2{ 1.0,1.0 }, C.modRect);
 
-					float n = (postModPAR * posScore * (areaScore + rectScore)) + (distScale * posScore);
+					float n = (C.modPost * posScore * (areaScore + rectScore)) + (C.distanceScale * posScore);
 
 					// generate vector OR vectors or curve to represent the past path of the blob
 					// v1 - v2 = vector between them
@@ -338,9 +342,9 @@ inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, float
 
 					// velocity
 					FloatVec2 v1 = FloatVec2{ old.centerOfArea.x - cur.centerOfArea.x, old.centerOfArea.y - cur.centerOfArea.y };
-					float velocity2D = deltaTime * sqrt((v1.x * v1.x) + (v1.y * v1.y));
+					float velocity2D = C.dt * sqrt((v1.x * v1.x) + (v1.y * v1.y));
 
-					if (n > discard)
+					if (n > C.discard)
 					{
 						initialized[i] = true;
 						scores[i].push_back(ScoreIdx{ j, n });
@@ -373,7 +377,7 @@ inline void ColorTrack_Test(cv::Mat* out, BlobFrame& last, BlobFrame& now, float
 					j = score.j;
 
 
-					if (biggest > accept)
+					if (biggest > C.accept)
 					{
 						break;
 					}
@@ -556,7 +560,7 @@ inline void GetBlobs(cv::Mat* in, cv::Mat* out, int max, int minSize, BlobFrame&
 	// color for funsies
 	for (int c = 0; c < frame.blobs.size(); c++)
 	{
-		ColorRGBi color = GetRandomColor();
+		ColorRGBi color = RandomColor();
 		frame.blobs[c].color = color;
 		std::vector<FillNodeIndex>& group = frame.blobs[c].indices;
 		float xTotal = 0.0;
@@ -634,3 +638,290 @@ void ConnectStereoFrames(cv::Mat* outL, cv::Mat* outR, BlobFrame left, BlobFrame
 
 }
 
+
+
+
+
+
+
+
+void GetPerimeterBufferFromPixel(cv::Mat* imgIn, cv::Mat* out, PixelCoord start, int threshold)
+{
+
+	cv::Mat imgOut;
+	imgIn->copyTo(imgOut);
+
+	// walk 1 pixel to start
+	// inset from -x 
+	// -x || LEFT == black
+	// came from LEFT 
+	// came from BLACK
+	// -y guaranteed black
+
+	// possible whites = +x , +y
+	// clock wise -> check +x first, then +y 
+	// if +x & +y == black ----> is a single pixel
+
+	// SEARCH ORDER CLOCKWISE
+	// +x
+	//  -y
+	//   -x
+	//    +y
+
+	// check first pixel to set state
+	// always start look from -1 in the counter clockwise position
+
+	direction look = NONE;
+
+	PixelCoord positiveX = PixelCoord{ start.x + 1 , start.y };
+	PixelCoord positiveY = PixelCoord{ start.x     , start.y + 1 };
+	PixelCoord pixel = PixelCoord{ start.x, start.y };
+	std::vector<std::vector<PerimeterPoint>> points(imgIn->cols, std::vector<PerimeterPoint>());
+
+	if (Traverseable(imgIn, positiveX, threshold))
+	{
+		log("x start");
+		look = NEG_Y;
+		pixel.x += 1;
+	}
+	else if (Traverseable(imgIn, positiveY, threshold))
+	{
+		log("y start");
+		look = POS_X;
+		pixel.y += 1;
+	}
+	else // is single pixel
+	{
+		// push 2 counts & break
+	}
+
+	std::array<PixelCoord, 4> moves =
+	{
+		PixelCoord{ 1, 0 },
+		PixelCoord{ 0, -1},
+		PixelCoord{ -1, 0},
+		PixelCoord{ 0, 1 },
+	};
+
+	// walk perimeter  COUNTER CLOCKWISE  -by searching-   CLOCKWISE
+	// 16 possible cases total, only will see 14 in loop
+	int count = 0;
+	bool search = true;
+	log("loop start");
+	while (search && (count < 1000))
+	{
+		log("count = " + str(count));
+		count++;
+		int blocks = 0;
+		int xBlocks = 0;
+		for (int i = 0; i < 4; i++)
+		{
+			direction n = direction((look + i) % 4);
+
+			PixelCoord neighbor = PixelCoord{ pixel.x + moves[n].x, pixel.y + moves[n].y };
+
+			bool axisX = !(n % 2);
+
+			if (Traverseable(imgIn, &neighbor, &threshold))
+			{
+				for (int k = xBlocks; k != 0; k--)
+				{
+					points[pixel.y].push_back(pixel.x);
+					ColorPixel(out, pixel, 255, 255, 0);
+				}
+				look = direction((n + 3) % 4);
+				if (true /*Equal(&pixel, &start)*/)
+				{
+					search = false;
+				}
+				pixel = neighbor;
+				break;
+			}
+			else
+			{
+				blocks++;
+				xBlocks += int(axisX);
+			}
+		}
+		if (blocks == 4)
+		{
+			break;
+		}
+	}
+}
+
+void GetLightBlobs(cv::Mat* mask, cv::Mat* out, int threshold)
+{
+	std::vector<CornerPinRect> boundingBoxes; // add size prediction based off past frames
+	cv::Mat result;
+	mask->copyTo(result);
+
+
+	for (int x = 1; x < (result.rows - 1); x++)
+	{
+		bool exitLoop = false;
+		for (int y = 1; y < (result.cols - 1); y++)
+		{
+
+			if (mask->at<cv::Vec3b>(x, y)[0] >= 10 /*&& visited[x][y] == false*/)
+			{
+				GetPerimeterBufferFromPixel(mask, &result, PixelCoord{ x,y }, threshold);
+				exitLoop = true;
+				break;
+			}
+			else
+			{
+				ColorPixel(&result, PixelCoord{ x,y }, 50, 10, 10);
+			}
+		}
+		if (exitLoop)
+		{
+			break;
+		}
+	}
+	result.copyTo(*out);
+}
+
+
+inline void ConnectFillNodeAboveBelow(FillNode* aboveNode, FillNode* belowNode)
+{
+	belowNode->connections.push_back(aboveNode->index);
+	aboveNode->connections.push_back(belowNode->index);
+}
+
+// MUST BE GIVEN THRESHOLDED IMAGE
+void SetSpanBufferPixels(cv::Mat* in, cv::Mat* out, int threshold, int max)
+{
+
+	int colorStep = round(max / 2) - 1;
+	int xLim = in->rows - 1;
+	int yLim = in->cols;
+
+	// check boundary pixels at edge of image
+	for (int y = 0; y < yLim; y++)
+	{
+		int scalarMin = !(in->at<cv::Vec3b>(1, y)[0] == max) + 1;
+		int scalarMax = !(in->at<cv::Vec3b>(xLim - 1, y)[0] == max) + 1;
+		if (in->at<cv::Vec3b>(0, y)[0] == max)
+		{
+			ColorPixel(out, PixelCoord{ 0,y }, scalarMin * colorStep, 0, 0);
+		}
+		if (in->at<cv::Vec3b>(xLim, y)[0] == max)
+		{
+			ColorPixel(out, PixelCoord{ xLim,y }, scalarMax * colorStep, 0, 0);
+		}
+	}
+
+	// check all other pixels 
+	for (int x = 1; x < xLim; x++)
+	{
+		for (int y = 0; y < yLim; y++)
+		{
+			int scalar = !(in->at<cv::Vec3b>(x - 1, y)[0] > threshold) + !(in->at<cv::Vec3b>(x + 1, y)[0] > threshold);
+
+			if (in->at<cv::Vec3b>(x, y)[0] == max)
+			{
+				ColorPixel(out, PixelCoord{ x,y }, scalar * colorStep, 0, 0);
+			}
+		}
+	}
+
+	// store all the pixels that represent min && || max
+	std::vector<std::vector<PerimeterPoint>> points(in->cols, std::vector<PerimeterPoint>());
+	for (int y = 0; y < yLim; y++)
+	{
+		bool onSpan = false;
+		int spanSize = 0;
+		for (int x = 0; x <= xLim; x++)
+		{
+			bool onPerimeter = out->at<cv::Vec3b>(x, y)[2] == colorStep;
+
+			if (onPerimeter)
+			{
+				points[y].push_back(PerimeterPoint(x));
+				onSpan = !onSpan;
+				spanSize += onPerimeter;
+				if (onSpan == false)
+				{
+
+				}
+			}
+			else
+			{
+				spanSize += onSpan;
+			}
+			ColorPixel(out, PixelCoord{ x,y }, onPerimeter * colorStep, onSpan * 255 * (!onPerimeter), 0);
+		}
+	}
+
+	// move representations to nodes
+	// store indexes of all nodes
+	std::vector<FillNodeIndex> nodesIndexes;
+	std::vector<std::vector<FillNode>> nodes(in->cols, std::vector<FillNode>());
+	int id = 0;
+	for (int y = 0; y < points.size(); y++)
+	{
+		for (int i = 0; i < points[y].size(); i += 2)
+		{
+			nodes[y].push_back(FillNode{ false, false, id++, FillNodeIndex{ y, i / 2 }, points[y][i], points[y][i + 1], points[y][i + 1] - points[y][i], std::vector<int>(), std::vector<FillNodeIndex>() });
+			nodesIndexes.push_back(FillNodeIndex{ y, i / 2 });
+		}
+	}
+
+	for (int y = 0; y < nodes.size() - 1; y++)
+	{
+		int y2 = y + 1;
+		for (int i = 0; i < nodes[y].size(); i++)
+		{
+			for (int k = 0; k < nodes[y2].size(); k++)
+			{
+				if (RangesIntersect(nodes[y][i].x1, nodes[y][i].x2, nodes[y2][k].x1, nodes[y2][k].x2))
+				{
+					nodes[y][i].connections.push_back(nodes[y2][k].index);
+					nodes[y2][k].connections.push_back(nodes[y][i].index);
+				}
+			}
+		}
+	}
+
+	std::vector<Blob> blobs;
+	std::vector<FillNodeIndex> open;
+	for (int s = 0; s < nodesIndexes.size(); s++)
+	{
+		Blob blob;
+		open.push_back(nodesIndexes[s]);
+
+		while (open.size())
+		{
+			FillNodeIndex index = open.back();
+			open.pop_back();
+
+			if (nodes[index.y][index.i].walked == false)
+			{
+				blob.indices.push_back(index);
+				nodes[index.y][index.i].walked = true;
+
+				for (int c = 0; c < nodes[index.y][index.i].connections.size(); c++)
+				{
+					open.push_back(nodes[index.y][index.i].connections[c]);
+				}
+			}
+		}
+		blobs.push_back(blob);
+	}
+
+	// color for funsies
+	for (int c = 0; c < blobs.size(); c++)
+	{
+		std::vector<FillNodeIndex>& group = blobs[c].indices;
+		ColorRGBi color = RandomColor();
+		for (int w = 0; w < group.size(); w++)
+		{
+			FillNode& node = nodes[group[w].y][group[w].i];
+			for (int f = 1; f < node.len; f++)
+			{
+				ColorPixel(out, PixelCoord{ node.x1 + f , node.index.y }, color.red, color.green, color.blue);
+			}
+		}
+	}
+}

@@ -162,6 +162,18 @@ struct BlobFrame
 	std::vector<std::vector<FillNode>> nodes;
 };
 
+struct ColorTrackParams {
+	float dt;
+	int areaThreshold; 
+	float distanceScale; 
+	float modPos; 
+	float modArea; 
+	float modRect; 
+	float modPost; 
+	float ratioModRect;
+	float discard; 
+	float accept;
+};
 
 
 struct Chain
