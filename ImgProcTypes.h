@@ -36,8 +36,18 @@ struct LogVars {
 	float time = 0.0;
 };*/
 
-
-
+struct Float64SlopeIntercept {
+	double m;
+	double b;
+};
+struct FloatLine {
+	FloatVec2 a;
+	FloatVec2 b;
+};
+struct IndexRange {
+	int begin;
+	int endExclusive;
+};
 struct CameraSettings {
 	double exposure = -8.50;
 	int resolutionScale = 2;
@@ -92,14 +102,7 @@ enum direction
 	NONE = -1
 };*/
 
-enum direction
-{
-	POS_X = 0,
-	NEG_Y = 1,
-	NEG_X = 2,
-	POS_Y = 3,
-	NONE = 4
-};
+
 
 typedef int Threshold;
 typedef int PerimeterPoint;
@@ -124,6 +127,13 @@ struct Rectangle
 	int yMin;
 	int xMax;
 	int yMax;
+};
+struct FloatRectangle
+{
+	float xMin;
+	float yMin;
+	float xMax;
+	float yMax;
 };
 
 
@@ -150,22 +160,9 @@ struct UnorderedSpan
 	int y;
 	Span span;
 };
-struct FillNodeIndex
-{
-	int y;
-	int i;
-};
-struct FillNode
-{
-	bool walked;
-	bool joined;
-	int id;
-	FillNodeIndex index;
+struct Range {
 	int x1;
 	int x2;
-	int len;
-	std::vector<int> ids;
-	std::vector<FillNodeIndex> connections;
 };
 struct FloatVec2
 {
@@ -177,6 +174,14 @@ struct FloatVec3
 	float x;
 	float y;
 	float z;
+};
+struct IntVec2 {
+	int x;
+	int y;
+};
+struct IntLine {
+	IntVec2 a;
+	IntVec2 b;
 };
 struct RectangleSize
 {
@@ -230,9 +235,30 @@ struct Blob
 
 	bool render;
 };
-struct BlobState
+struct ShapeRLE {
+	int area;
+	FloatVec2 areaCenter;
+	int width;
+	int height;
+	Rectangle bounds;
+	std::vector<std::vector<Range>> rowRanges;
+};
+struct FillNodeIndex
 {
-	std::vector<std::vector<Blob>> butt;
+	int y;
+	int i;
+};
+struct FillNode
+{
+	bool walked;
+	bool joined;
+	int id;
+	FillNodeIndex index;
+	int x1;
+	int x2;
+	int len;
+	std::vector<int> ids;
+	std::vector<FillNodeIndex> connections;
 };
 struct BlobFrame
 {
@@ -242,6 +268,11 @@ struct BlobFrame
 };
 
 
+
+struct BlobState
+{
+	std::vector<std::vector<Blob>> butt;
+};
 
 
 struct Chain

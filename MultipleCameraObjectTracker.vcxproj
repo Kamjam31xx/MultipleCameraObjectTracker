@@ -29,11 +29,15 @@
     <ClInclude Include="EntityManager.h" />
     <ClInclude Include="FrameRate.h" />
     <ClInclude Include="EntityValues.h" />
+    <ClInclude Include="Calibrate.h" />
+    <ClInclude Include="LinearRegression.h" />
+    <ClInclude Include="PolyFit.h" />
     <ClInclude Include="PolynomialRegression.h" />
     <ClInclude Include="Keyboard.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="ImgProc.h" />
     <ClInclude Include="ImgProcTypes.h" />
+    <ClInclude Include="Values.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

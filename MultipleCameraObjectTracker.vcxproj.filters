@@ -56,5 +56,17 @@
     <ClInclude Include="PolynomialRegression.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="PolyFit.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="LinearRegression.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Calibrate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Values.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

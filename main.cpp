@@ -47,7 +47,7 @@ DeltaTime Timer;
 DeltaTime VelocityTimer;
 FrameRate FPS = FrameRate(10);
 
-cv::VideoCapture cap(1);
+cv::VideoCapture cap(0);
 
 CameraSettings camera = CameraSettings();
 ProcessSettings process = ProcessSettings();
@@ -122,6 +122,7 @@ int main()
 		}
 		else
 		{
+			// IMPLEMENT FUNCTION POINTERS TO ELIMINATE BRANCHING
 			cv::cvtColor(frame[front], detect[front], cv::COLOR_BGR2GRAY);
 			if (process.blur) {
 				cv::GaussianBlur(frame[front], frame[front], process.kernelSize, 0);
@@ -160,8 +161,10 @@ int main()
 			}
 			cv::cvtColor(detect[front], fillResult[front], cv::COLOR_GRAY2BGR);
 
-			leftCamera[front] = cv::Mat(fillResult[front], cv::Rect(0, 0, fillResult[front].cols / 2, fillResult[front].rows));
-			rightCamera[front] = cv::Mat(fillResult[front], cv::Rect(fillResult[front].cols / 2, 0, fillResult[front].cols / 2, fillResult[front].rows));
+			int width = fillResult[front].cols / 2;
+			int height = fillResult[front].rows;
+			leftCamera[front] = cv::Mat(fillResult[front], cv::Rect(0, 0, width, height));
+			rightCamera[front] = cv::Mat(fillResult[front], cv::Rect(width, 0, width, height));
 
 			leftCamera[front].copyTo(leftResult[front]);
 			rightCamera[front].copyTo(rightResult[front]);

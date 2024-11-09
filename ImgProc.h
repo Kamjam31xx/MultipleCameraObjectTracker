@@ -17,6 +17,7 @@
 #include <deque>
 #include <cmath>
 #include <utility>
+#include <algorithm>
 
 #include "ImgProcTypes.h"
 #include "DeltaTime.h"
@@ -93,16 +94,26 @@ inline bool PixelInBounds(PixelCoord p, int width, int height)
 	}
 }
 
-bool aInB(std::vector<PixelCoord>* a, PixelCoord b)
+bool aInB(std::vector<PixelCoord>* a, PixelCoord xIntercept)
 {
 	for (PixelCoord& px : *a)
 	{
-		if ((px.x == b.x) && (px.y == b.y))
+		if ((px.x == xIntercept.x) && (px.y == xIntercept.y))
 		{
 			return true;
 		}
 	}
 	return false;
+}
+
+inline float Distance(FloatVec2 a, FloatVec2 b) {
+	float term1 = powf(a.x - b.x, 2);
+	float term2 = powf(a.y - b.y, 2);
+	return std::sqrtf(term1 + term2);
+}
+
+inline int Squared(int a) {
+	return a * a;
 }
 
 inline ColorRGBi RandomColor()
@@ -195,14 +206,14 @@ inline void ConnectColorFrameToFrame(cv::Mat* out, BlobFrame& frame, BlobFrame& 
 		}
 	}
 }
-inline float AreaRatio(int a, int b)
+inline float MinRatio(int a, int xIntercept)
 {
-	return (a > b) ? (a / b) : (b / a);
+	return (a > xIntercept) ? (a / xIntercept) : (xIntercept / a);
 }
-inline float DistanceNonNegative(FloatVec2 a, FloatVec2 b)
+inline float Distance(FloatVec2 a, FloatVec2 xIntercept)
 {
-	float x = a.x - b.x;
-	float y = a.y - b.y;
+	float x = a.x - xIntercept.x;
+	float y = a.y - xIntercept.y;
 
 	return std::sqrt((x * x) + (y * y));
 }
@@ -228,54 +239,54 @@ inline float QuadraticBell(float n)
 	// maybe doesnt branch -> might not be as good of an approximation of normal dist
 	return 1 / (1 + (n * n));
 }
-inline float Score1D(float max, float a, float b, float g)
+inline float Score1D(float max, float a, float xIntercept, float g)
 {
-	float x = a - b;
+	float x = a - xIntercept;
 	x *= x * g;
 
 	return max * NormalizedCosBell(g * x);
 }
-inline float Score2D(float max, FloatVec2 a, FloatVec2 b, FloatVec2 w, float g)
+inline float Score2D(float max, FloatVec2 a, FloatVec2 xIntercept, FloatVec2 w, float g)
 {
-	float x = a.x - b.x;
-	float y = a.y - b.y;
+	float x = a.x - xIntercept.x;
+	float y = a.y - xIntercept.y;
 	x *= x * w.x;
 	y *= y * w.y;
 
 	return max * NormalizedCosBell(g * (x + y));
 }
-inline float Score3D(float max, FloatVec3 a, FloatVec3 b, FloatVec3 w, float g)
+inline float Score3D(float max, FloatVec3 a, FloatVec3 xIntercept, FloatVec3 w, float g)
 {
-	float x = a.x - b.x;
-	float y = a.y - b.y;
-	float z = a.z - b.z;
+	float x = a.x - xIntercept.x;
+	float y = a.y - xIntercept.y;
+	float z = a.z - xIntercept.z;
 	x *= x * w.x;
 	y *= y * w.y;
 	z *= z * w.z;
 
 	return max * NormalizedCosBell(g * (x + y + z));
 }
-inline float QuadScore1D(float max, float a, float b, float g)
+inline float QuadScore1D(float max, float a, float xIntercept, float g)
 {
-	float x = a - b;
+	float x = a - xIntercept;
 	x *= x * g;
 
 	return max * NormalizedCosBell(g * x);
 }
-inline float QuadScore2D(float max, FloatVec2 a, FloatVec2 b, FloatVec2 w, float g)
+inline float QuadScore2D(float max, FloatVec2 a, FloatVec2 xIntercept, FloatVec2 w, float g)
 {
-	float x = a.x - b.x;
-	float y = a.y - b.y;
+	float x = a.x - xIntercept.x;
+	float y = a.y - xIntercept.y;
 	x *= x * w.x;
 	y *= y * w.y;
 
 	return max * NormalizedCosBell(g * (x + y));
 }
-inline float QuadScore3D(float max, FloatVec3 a, FloatVec3 b, FloatVec3 w, float g)
+inline float QuadScore3D(float max, FloatVec3 a, FloatVec3 xIntercept, FloatVec3 w, float g)
 {
-	float x = a.x - b.x;
-	float y = a.y - b.y;
-	float z = a.z - b.z;
+	float x = a.x - xIntercept.x;
+	float y = a.y - xIntercept.y;
+	float z = a.z - xIntercept.z;
 	x *= x * w.x;
 	y *= y * w.y;
 	z *= z * w.z;
@@ -468,6 +479,308 @@ inline void ConnectBlobsTemporal(cv::Mat* out, std::deque<BlobFrame>& in, int di
 }
 
 
+// walk 1 pixel to start
+// inset from -x 
+// -x || LEFT == black
+// came from LEFT 
+// came from BLACK
+// -y guaranteed black
+
+// possible whites = +x , +y
+// clock wise -> check +x first, then +y 
+// if +x & +y == black ----> is a single pixel
+
+// SEARCH ORDER CLOCKWISE
+// +x
+//  -y
+//   -x
+//    +y
+
+// check first pixel to set state
+// always start look from -1 in the counter clockwise position
+
+// walk perimeter  COUNTER CLOCKWISE  -by searching-   CLOCKWISE
+// 16 possible cases total, only will see 14 in loop
+
+std::vector<PixelCoord> PerimeterPixels(cv::Mat& img, PixelCoord start)
+{
+	// store outline pixels
+	std::vector<PixelCoord> outlinePx = std::vector<PixelCoord>(0);
+
+	// set possible walk & look directions counter-clockwise
+	PixelCoord right = PixelCoord{ 1, 0 };
+	PixelCoord down = PixelCoord{ 0, -1 };
+	PixelCoord left = PixelCoord{ -1, 0 };
+	PixelCoord up = PixelCoord{ 0, 1 };
+	std::array<PixelCoord, 4> moves = { right, down, left, up };
+	enum direction { RIGHT = 0, DOWN = 1, LEFT = 2, UP = 3 };
+
+	// walk perimeter and store pixels
+	PixelCoord on = start;
+	direction from = LEFT;
+	while (true) {
+
+		direction adjacent = from;
+		PixelCoord coord = {0,0};
+		int turnsCCW = 0;
+		int turnsCW = 0;
+		
+		// rotate look direction CCW until blocked
+		for (int rotate = 1; rotate != 5; rotate++) {
+			adjacent = direction((from + rotate) % 4);
+			coord = Add(on, moves[adjacent]);
+			if (Blocked(img, coord, 127)) {
+				turnsCCW = rotate;
+				break;
+			} 
+		}
+
+		// rotate look direction CW until open
+		for (int rotate = 1; rotate != 5; rotate++) {
+			adjacent = direction((from + 4 - rotate) % 4);
+			coord = Add(on, moves[adjacent]);
+			if (Walkable(img, coord, 127)) {
+				turnsCW = rotate;
+				break;
+			}
+		}
+
+		// check for single pixel
+		if (turnsCW == 4) {
+			outlinePx.push_back(coord);
+			break;
+		}
+
+		// check for imporper start coordinate -> only insert from scan line method incrementing x
+		if (turnsCCW == 4) {
+			outlinePx.push_back(coord);
+			break;
+		}
+
+		// typical cases
+		bool noTurn = from == direction((adjacent + 2) % 4);
+		bool rightTurn = from == direction((adjacent + 1) % 4);
+		if (noTurn || rightTurn) {
+			if (!ContainsCoord(outlinePx, on)) {
+				outlinePx.push_back(on);
+			}
+		}
+
+		// advance to next pixel
+		on = coord;
+		from = direction((adjacent + 2) % 4);
+		bool returnedToHome = IsSame(on, start);
+		if (returnedToHome) {
+			break;
+		}
+	}
+
+	return outlinePx;
+}
+inline bool ContainsCoord(std::vector<PixelCoord>& pixels, PixelCoord val) {
+	for (PixelCoord px : pixels) {
+		if (px.x == val.x && px.y == val.y) {
+			return true;
+		}
+	}
+	return false;
+}
+inline bool Walkable(cv::Mat& mat, PixelCoord in, int threshold)
+{
+	return PixelInBounds(in, mat.rows, mat.cols) ? bool(mat.at<cv::Vec3b>(in.x, in.y)[0] > threshold) : false;
+}
+inline bool Blocked(cv::Mat& mat, PixelCoord in, int threshold)
+{
+	return !PixelInBounds(in, mat.rows, mat.cols) ? bool(mat.at<cv::Vec3b>(in.x, in.y)[0] > threshold) : false;
+}
+inline bool IsSame(PixelCoord a, PixelCoord b) {
+	return a.x == b.x && a.y == b.y;
+}
+inline bool IsSame(IntVec2 a, IntVec2 b) {
+	return a.x == b.x && a.y == b.y;
+}
+inline IntLine SwapAB(IntLine input) {
+	return IntLine{ input.b, input.a };
+}
+inline PixelCoord Add(PixelCoord a, PixelCoord b) {
+	return PixelCoord{ a.x + b.x, a.y + b.y };
+}
+inline std::vector<ShapeRLE> ExtractShapesRLE(cv::Mat* in) {
+
+	// stores state
+	BlobFrame frame = BlobFrame{};
+
+	// max color value and threshold for fill
+	int max = 255;
+	int colorStep = round(max / 2) - 1;
+
+	// padding to stop the kernel from trying to read indices at -1 and width or height which are out of bounds
+	int xLim = in->rows - 1;
+	int yLim = in->cols;
+
+
+	std::vector<std::vector<PerimeterPoint>> points(in->cols, std::vector<PerimeterPoint>());
+	for (int y = 0; y < yLim; y++)
+	{
+
+		if ((in->at<cv::Vec3b>(0, y)[0] == max) && (in->at<cv::Vec3b>(1, y)[0] == max))
+		{
+			points[y].push_back(PerimeterPoint(0));
+		}
+	}
+
+	for (int x = 1; x < xLim; x++)
+	{
+		for (int y = 0; y < yLim; y++)
+		{
+			if ((in->at<cv::Vec3b>(x, y)[0] == max) && ((!(in->at<cv::Vec3b>(x - 1, y)[0] == max) + !(in->at<cv::Vec3b>(x + 1, y)[0] == max)) == 1))
+			{
+				points[y].push_back(PerimeterPoint{ x });
+			}
+		}
+	}
+
+	for (int y = 0; y < yLim; y++)
+	{
+		if ((in->at<cv::Vec3b>(xLim, y)[0] == max) && (in->at<cv::Vec3b>(xLim - 1, y)[0] == max))
+		{
+			points[y].push_back(PerimeterPoint(xLim));
+		}
+	}
+
+	int id = 0;
+	for (int y = 0; y < points.size(); y++)
+	{
+		for (int i = 0; i < points[y].size(); i += 2)
+		{
+			frame.nodes[y].push_back(FillNode{ false, false, id++, FillNodeIndex{ y, i / 2 }, points[y][i], points[y][i + 1], points[y][i + 1] - points[y][i], std::vector<int>(), std::vector<FillNodeIndex>() });
+			frame.indices.push_back(FillNodeIndex{ y, i / 2 });
+		}
+	}
+
+	for (int y = 0; y < frame.nodes.size() - 1; y++)
+	{
+		int y2 = y + 1;
+		for (int i = 0; i < frame.nodes[y].size(); i++)
+		{
+			for (int k = 0; k < frame.nodes[y2].size(); k++)
+			{
+				if (RangesIntersect(frame.nodes[y][i].x1, frame.nodes[y][i].x2, frame.nodes[y2][k].x1, frame.nodes[y2][k].x2))
+				{
+					frame.nodes[y][i].connections.push_back(frame.nodes[y2][k].index);
+					frame.nodes[y2][k].connections.push_back(frame.nodes[y][i].index);
+				}
+			}
+		}
+	}
+
+	std::vector<FillNodeIndex> open;
+	for (int s = 0; s < frame.indices.size(); s++)
+	{
+		Blob blob;
+		open.push_back(frame.indices[s]);
+
+		while (open.size())
+		{
+			FillNodeIndex index = open.back();
+			open.pop_back();
+
+			if (frame.nodes[index.y][index.i].walked == false)
+			{
+				blob.indices.push_back(index);
+				frame.nodes[index.y][index.i].walked = true;
+
+				for (int c = 0; c < frame.nodes[index.y][index.i].connections.size(); c++)
+				{
+					open.push_back(frame.nodes[index.y][index.i].connections[c]);
+				}
+			}
+		}
+		frame.blobs.push_back(blob);
+	}
+
+	for (int c = 0; c < frame.blobs.size(); c++)
+	{
+		ColorRGBi color = RandomColor();
+		frame.blobs[c].color = color;
+		std::vector<FillNodeIndex>& group = frame.blobs[c].indices;
+		float xTotal = 0.0;
+		float yTotal = 0.0;
+		float coords = 0.0;
+
+		int xMin = 31000;
+		int yMin = 31000;
+		int xMax = 0;
+		int yMax = 0;
+		for (int w = 0; w < group.size(); w++)
+		{
+			FillNode& node = frame.nodes[group[w].y][group[w].i];
+			float nodeArea = (node.x2 - node.x1) + 1;
+			frame.blobs[c].area += nodeArea;
+
+			if (node.x1 < xMin)
+			{
+				xMin = node.x1;
+			}
+			if (node.x2 > xMax)
+			{
+				xMax = node.x2;
+			}
+			if (group[w].y < yMin)
+			{
+				yMin = group[w].y;
+			}
+			if (group[w].y > yMax)
+			{
+				yMax = group[w].y;
+			}
+		}
+
+		frame.blobs[c].centerOfArea = FloatVec2{ xTotal / coords, yTotal / coords };
+		frame.blobs[c].rect = Rectangle{ xMin, yMin, xMax, yMax };
+		Rectangle& rect = frame.blobs[c].rect;
+		frame.blobs[c].size = RectangleSize{ rect.xMax - rect.xMin , rect.yMax - rect.yMin };
+	}
+
+	std::vector<ShapeRLE> shapes = std::vector<ShapeRLE>(frame.blobs.size(), ShapeRLE{});
+
+	for (Blob b : frame.blobs) {
+		
+		ShapeRLE shape = ShapeRLE{};
+		shape.rowRanges = std::vector<std::vector<Range>>(b.size.height);
+		shape.area = b.area;
+		shape.areaCenter = b.centerOfArea;
+		shape.bounds = b.rect;
+		shape.width = b.size.width;
+		shape.height = b.size.height;
+
+		for (FillNodeIndex f : b.indices) {
+			FillNode n = frame.nodes[f.y][f.i];
+			Range r = { n.x1, n.x2 };
+			shape.rowRanges[f.y - shape.bounds.yMin].push_back(r);
+		}
+
+		for (std::vector<Range>& row : shape.rowRanges) {
+			std::vector<std::tuple<int, int>> sorting = std::vector<std::tuple<int, int>>(row.size());
+			for (int i = 0; i < sorting.size(); i++) {
+				sorting[i] = std::make_tuple(row[i].x1, i);
+			}
+			std::sort(sorting.begin(), sorting.end());
+			std::vector<Range> sorted = std::vector<Range>(0);
+			for (std::tuple<int, int> mapping : sorting) {
+				int index = std::get<1>(mapping);
+				Range r = row[index];
+				sorted.push_back(r);
+			}
+			row = sorted;
+		}
+
+		shapes.push_back(shape);
+	}
+
+	return shapes;
+}
+
 inline void GetBlobs(cv::Mat* in, cv::Mat* out, int max, int minSize, BlobFrame& frame)
 {
 	int colorStep = round(max / 2) - 1;
@@ -644,7 +957,7 @@ void ConnectStereoFrames(cv::Mat* _outLeft, cv::Mat* _outRight, BlobFrame _left,
 
 
 
-
+/*
 void GetPerimeterBufferFromPixel(cv::Mat* _in, cv::Mat* _out, PixelCoord _start, int _threshold)
 {
 
@@ -730,7 +1043,7 @@ void GetPerimeterBufferFromPixel(cv::Mat* _in, cv::Mat* _out, PixelCoord _start,
 					ColorPixel(_out, pixel, 255, 255, 0);
 				}
 				look = direction((n + 3) % 4);
-				if (true /*Equal(&pixel, &start)*/)
+				if (true)
 				{
 					search = false;
 				}
@@ -749,7 +1062,8 @@ void GetPerimeterBufferFromPixel(cv::Mat* _in, cv::Mat* _out, PixelCoord _start,
 		}
 	}
 }
-
+*/
+/*
 void GetLightBlobs(cv::Mat* _mask, cv::Mat* _out, int _threshold)
 {
 	std::vector<CornerPinRect> boundingBoxes; // add size prediction based off past frames
@@ -763,7 +1077,7 @@ void GetLightBlobs(cv::Mat* _mask, cv::Mat* _out, int _threshold)
 		for (int y = 1; y < (result.cols - 1); y++)
 		{
 
-			if (_mask->at<cv::Vec3b>(x, y)[0] >= 10 /*&& visited[x][y] == false*/)
+			if (_mask->at<cv::Vec3b>(x, y)[0] >= 10) //&& visited[x][y] == false)
 			{
 				GetPerimeterBufferFromPixel(_mask, &result, PixelCoord{ x,y }, _threshold);
 				exitLoop = true;
@@ -781,6 +1095,7 @@ void GetLightBlobs(cv::Mat* _mask, cv::Mat* _out, int _threshold)
 	}
 	result.copyTo(*_out);
 }
+*/
 
 
 inline void ConnectFillNodeAboveBelow(FillNode* _above, FillNode* _below)
