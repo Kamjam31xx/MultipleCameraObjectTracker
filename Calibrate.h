@@ -6,52 +6,12 @@
 #include <iostream>
 #include <math.h>
 #include <limits>
+#include <bitset>
 
 #include "ImgProcTypes.h"
 #include "Values.h"
 #include "ImgProc.h"
-
-struct LensDistortion {
-	FloatVec2 centerLeft;
-	FloatVec2 centerRight;
-};
-
-struct Grid {
-	FloatRectangle bounds;
-	std::array<std::array<FloatVec2, 11>, 11> linePointMat;
-	std::array<std::array<GridCell, 10>, 10> cellMat;
-	FloatVec2 center;
-};
-
-struct LineSegment {
-	FloatVec2 a;
-	FloatVec2 b;
-};
-
-using GridLine = std::vector<FloatVec2>;
-using LinePerimeter = std::vector<IntLine>;
-
-enum Axis {
-	X_AXIS = 0,
-	Y_AXIS = 1
-};
-
-
-struct FloatQuad {
-	std::array<FloatVec2, 4> vertices;
-};
-
-struct CellQuad {
-	FloatVec2 botLeft;
-	FloatVec2 topLeft;
-	FloatVec2 botRight;
-	FloatVec2 topRight;
-};
-
-struct GridCell {
-	ShapeRLE shape;
-	CellQuad quad;
-};
+#include "Presets.h"
 
 bool AXGreaterThanBX(const FloatVec2& a, const FloatVec2& b) {
 	return a.x > b.x;
@@ -563,8 +523,150 @@ namespace Calibrate {
 		return Grid{ FloatRectangle{bounds.xMin, bounds.yMin, bounds.xMax, bounds.yMax}, gridLinePoints, gridCells, center };
 	}
 
+	// takes known measurements and returns the corresponding grid for those measurements
+	Grid CalculateGrid(float xFov, IntVec2 imgSize, FloatVec2 sensorSizeInches, inches gridDistInches, inches gridSizeInches) {
+
+		float alpha = xFov * TO_RADIANS;
+		float a = sensorSizeInches.x / 2.0f;
+		float beta = (90.0f * TO_RADIANS) - (xFov / (2.0f * TO_RADIANS));
+		float c = a / sinf(alpha);
+		float b = sqrtf((c * c) - (a * a));
+		float nearPlane = b;
+
+		float a2 = sensorSizeInches.y / 2;
+		float c2 = sqrtf(powf(a2, 2) + pow(nearPlane, 2));
+		float yFov = asinf(a2 / c2) * TO_DEGREES;
+
+		// construct initial
+		Grid output = Grid{};
+		const int m = 11;
+		float gridScale = gridSizeInches / m;
+		for (int i = 0; i < m; i++) {
+			for (int j = 0; j < m; j++) {
+				output.linePointMat[i][j].x = (nearPlane * (i + static_cast<float>(-m) / 2.0f) * gridScale) / gridDistInches;
+				output.linePointMat[i][j].y = (nearPlane * (j + static_cast<float>(-m) / 2.0f) * gridScale) / gridDistInches;
+			}
+		}
+
+		return output;
+	}
+
+	// takes in a distorted and undistorted grid, and returns the approximate solutions for the lens distortion polynomials
+	LensDistortion LensDistortionForGrids(Grid distorted, Grid reference) {
+
+		LensDistortion output = {};
+
+		// calculate the magnitudes to use for radial distortion summing
+		std::vector<double> xi = Magnitudes(reference.linePointMat);
+		std::vector<double> yi = Magnitudes(distorted.linePointMat);
+		int numResiduals = xi.size();
+
+		// note that m functions can be greater than n betas, as there may be more partial derivatives than betas
+		int n = 3; // number of betas
+		int m = 3; // number of functions
+		cv::Mat betas = (cv::Mat_<double>(n, 1) << 1.0, 0.2, 0.02);
+
+		// jacobian matrix of m functions and n residuals 
+		cv::Mat jacobian = cv::Mat(numResiduals, m, CV_64F);
+		cv::Mat residuals = cv::Mat(numResiduals, 1, CV_64F);
+		cv::Mat psuedoInverse;
+
+		// minimize the sum of squares of the residuals
+		double sum = 0.0;
+		while (true) {
+
+			// construct the jacobian for the residuals of m function partial derivatives with respect to the betas
+			SetJacobian(jacobian, xi, yi, betas, Poly3StandardPartials);
+			cv::invert(jacobian, psuedoInverse); // note : check flags 
+			CalcResiduals(residuals, xi, yi, betas, Poly3StandardResiduals);
+
+			// calculate the new betas
+			betas = betas - (psuedoInverse * residuals);
+
+			// calculate the sum of squares of the residuals
+			sum = Poly3StandardSquareResiduals(residuals);
+			if (sum < 1.0) {
+				break;
+			}
+		}
+
+		output.distortion3 = Poly3{
+			betas.at<double>(0,0),
+			betas.at<double>(1,0),
+			betas.at<double>(2,0)
+		};
+
+		return output;
+	}
+
+	// construct the jacobian for the given x, y, betas, and partial derivative functions
+	// unsafe - size your inputs right
+	void SetJacobian(cv::Mat& out, std::vector<double>& xi, std::vector<double>& yi, cv::Mat& betas, std::function<double(double, double, int)> partials) {
+		int m = betas.rows;
+		for (int i = 0; i < xi.size; i++) {
+			for (int j = 0; j < m; j++) {
+				int k = j + (i * m);
+				out.at<double>(j, i) = partials(xi[k], yi[k], j);
+			}
+		}
+	}
+
+	// given the function for the residual using the betas of each xi yi, set the residuals result in the output column matrix
+	void CalcResiduals(cv::Mat& out, std::vector<double>& xi, std::vector<double>& yi, cv::Mat& betas, std::function<double(double, double, cv::Mat&)> residual) {
+		for (int i = 0; i < xi.size(); i++) {
+			out.at<double>(i, 0) = residual(xi[i], yi[i], betas);
+		}
+	}
+
+	// for the function x - (hy + ky^2 + uy^3)
+	double Poly3StandardPartials(double x, double y, int function) {
+		switch (function) {
+		case 0:
+			return x -(-y);
+		case 1:
+			return x -(pow(-y, 2));
+		case 2:
+			return x - (pow(-y, 3));
+		}
+		return 0.0;
+	}
+
+	// for the function x - (hy + ky^2 + uy^3)
+	double Poly3StandardResiduals(double x, double y, cv::Mat betas) {
+		double h = betas.at<double>(0, 0);
+		double k = betas.at<double>(1, 0);
+		double u = betas.at<double>(2, 0);
+		return x - ((h * y) + (k * pow(y, 2) + (u * pow(y, 3))));
+	}
+
+	// for the function x - (hy + ky^2 + uy^3)
+	double Poly3StandardSquareResiduals(cv::Mat residuals) {
+		double sum = 0.0;
+		for (int i = 0; i < residuals.rows; i++) {
+			sum += pow(residuals.at<double>(i, 0), 2);
+		}
+		return sum;
+	}
+
+
+
+	// returns the magnitudes of the vectors for each point in the linePointMat
+	std::vector<double> Magnitudes(std::array<std::array<FloatVec2, 11>,11> input) {
+
+		std::vector<double> output = std::vector<double>();
+
+		for (std::array<FloatVec2, 11> col : input) {
+			for (FloatVec2 p : col) {
+				double magnitude = sqrt((p.x * p.x) + (p.y * p.y));
+				output.push_back(magnitude);
+			}
+		}
+
+		return output;
+	}
+
 	// input measures are in inches
-	LensDistortion Distortion(cv::Mat& l, cv::Mat& r, float imgDist, float imgSize, float gridSize, float parallax, float fov) {
+	StereoLensDistortion Distortion(cv::Mat& l, cv::Mat& r, float imgDist, float imgSize, float gridSize, float parallax, float fov) {
 
 		// solve for rectilinear position. imdDist should be greater than parallax.
 		FloatVec2 linearCenter { 0.0f, 0.0f };
@@ -585,9 +687,19 @@ namespace Calibrate {
 		Grid gridLeft = PolySearchGrid(l);
 		Grid gridRight = PolySearchGrid(r);
 
-		// 
+		// approximate the undistorted left and right grids based on known measurements
+		OV9750 cam = OV9750{};
+		inches gridDistance = 0.0f;
+		Grid undistortedLeft = CalculateGrid(cam.xFovDegrees, cam.imageSize, FloatVec2{ cam.width, cam.height }, gridDistance, gridSize);
+		Grid undistortedRight = CalculateGrid();
 
-		return LensDistortion{ {0.0f,0.0f},{0.0f, 0.0f} };
+		// fit curves to the thing or whatever
+		LensDistortion distortionLeft = LensDistortionForGrids(gridLeft, undistortedLeft);
+		LensDistortion distortionRight = LensDistortionForGrids(gridRight, undistortedRight);
+		StereoLensDistortion distortion{ distortionLeft, distortionRight };
+
+
+		return distortion;
 	}
 
 

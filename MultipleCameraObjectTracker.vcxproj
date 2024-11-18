@@ -30,6 +30,7 @@
     <ClInclude Include="FrameRate.h" />
     <ClInclude Include="EntityValues.h" />
     <ClInclude Include="Calibrate.h" />
+    <ClInclude Include="Presets.h" />
     <ClInclude Include="LinearRegression.h" />
     <ClInclude Include="PolyFit.h" />
     <ClInclude Include="PolynomialRegression.h" />

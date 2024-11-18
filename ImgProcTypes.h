@@ -106,6 +106,11 @@ enum direction
 
 typedef int Threshold;
 typedef int PerimeterPoint;
+typedef float millimeters;
+typedef float inches;
+
+#define MILLIMETERS_TO_INCHES 0.0393701;
+#define INCHES_TO_MILLIMETERS 25.4;
 
 struct CornerPinRect
 {
@@ -316,7 +321,74 @@ struct ViewState
 
 };
 
+struct StereoLensDistortion {
+	LensDistortion left;
+	LensDistortion right;
+};
+struct LensDistortion {
+	FloatVec2 translation;
+	Poly3 distortion3;
+	Poly4 distortion4;
+	Poly5 distortion5;
+};
 
+struct Poly3 {
+	float a;
+	float b;
+	float c;
+};
+
+struct Poly4 {
+	float a;
+	float b;
+	float c;
+	float d;
+};
+
+struct Poly5 {
+	float a;
+	float b;
+	float c;
+	float d;
+	float e;
+};
+
+struct Grid {
+	FloatRectangle bounds;
+	std::array<std::array<FloatVec2, 11>, 11> linePointMat;
+	std::array<std::array<GridCell, 10>, 10> cellMat;
+	FloatVec2 center;
+};
+
+struct LineSegment {
+	FloatVec2 a;
+	FloatVec2 b;
+};
+
+using GridLine = std::vector<FloatVec2>;
+using LinePerimeter = std::vector<IntLine>;
+
+enum Axis {
+	X_AXIS = 0,
+	Y_AXIS = 1
+};
+
+
+struct FloatQuad {
+	std::array<FloatVec2, 4> vertices;
+};
+
+struct CellQuad {
+	FloatVec2 botLeft;
+	FloatVec2 topLeft;
+	FloatVec2 botRight;
+	FloatVec2 topRight;
+};
+
+struct GridCell {
+	ShapeRLE shape;
+	CellQuad quad;
+};
 
 /*
 struct PerimeterSearch
