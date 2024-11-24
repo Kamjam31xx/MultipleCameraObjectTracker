@@ -1,113 +1,34 @@
 #pragma once
 
 #include <vector>
-/*struct CapVars {
-	int scale = 2;
-	int width = 2560 / scale;
-	int height = 960 / scale;
-	int exposure = -8.50;
-};
-struct PostProcVars {
-	float minArea = 150;
-	float distanceScale = 1.0;
-	float modPos = 0.1;
-	float modArea = 0.05;
-	float modRect = 0.06;
-	float modPost = 1.0;
-	float ratioModRect = 1.1;
-	float discard = 0.15;
-	float accept = 2.4;
-};
-struct ConvolutionVars {
-	double thresh = 100.0;
-	double threshMax = 255.0;
-	int erosion = 3;
-	int dilation = 3;
-	int sobelThresh = 100;
-	bool sobel = false;
-
-	bool blur = false;
-	bool erode = false;
-	bool dilate = false;
-	bool color = false;
-};
-struct LogVars {
-	float rate = 1.0;
-	float time = 0.0;
-};*/
 
 struct Float64SlopeIntercept {
 	double m;
 	double b;
 };
-struct FloatLine {
-	FloatVec2 a;
-	FloatVec2 b;
+struct Float64SlopeInterceptRotation {
+	double m;
+	double b;
+	double degrees;
 };
+
 struct IndexRange {
 	int begin;
 	int endExclusive;
 };
-struct CameraSettings {
-	double exposure = -8.50;
-	int resolutionScale = 2;
-	int width = 2560 / resolutionScale;
-	int height = 960 / resolutionScale;
-};
 
-struct ProcessSettings {
-	float areaMinSize = 150.0;
-	float distScale = 1.0;
-	float distMod = 0.1;
-	float areaMod = 0.05;
-	float rectMod = 0.06;
-	float rectAreaRatioMod = 1.1;
-	float postMod = 1.0;
-	float discardThreshold = 0.15;
-	float acceptThreshold = 2.4;
-	bool wait = false;
-	bool advanceFrame = false;
-	bool frameAdvanced = false;
-	bool blur = false;
-	bool erode = false;
-	bool dilate = false;
-	bool color = false;
-	int cvwait = 1;
-	float cvwaitSlider = 1.0;
-	bool lag = false;
-	bool sobel = false;
-	int sobelThresh = 100;
-	int temporalSteps = 5;
-	int temporalFrames = 10;
-	double threshold = 100.0;
-	double thresholdMax = 255.0;
-	int erosion = 3;
-	int dilation = 3;
-	cv::Size kernelSize{ 3, 3 };
-	float logRate = 1.0;
-	float logTime = 0.0;
-};
 
 struct FittedCurve {
 
 };
 
-/*
-enum direction
-{
-	UP = 0,
-	RIGHT = 1,
-	DOWN = 2,
-	LEFT = 3,
-	NONE = -1
-};*/
-
-
 
 typedef int Threshold;
 typedef int PerimeterPoint;
-typedef float millimeters;
-typedef float inches;
+typedef float Millimeters;
+typedef float Inches;
+typedef double Degrees;
+typedef double Radians;
 
 #define MILLIMETERS_TO_INCHES 0.0393701;
 #define INCHES_TO_MILLIMETERS 25.4;
@@ -180,6 +101,10 @@ struct FloatVec3
 	float y;
 	float z;
 };
+struct FloatLine {
+	FloatVec2 a;
+	FloatVec2 b;
+};
 struct IntVec2 {
 	int x;
 	int y;
@@ -205,7 +130,23 @@ struct IJK
 	int j;
 	int k;
 };
-
+struct FillNodeIndex
+{
+	int y;
+	int i;
+};
+struct FillNode
+{
+	bool walked;
+	bool joined;
+	int id;
+	FillNodeIndex index;
+	int x1;
+	int x2;
+	int len;
+	std::vector<int> ids;
+	std::vector<FillNodeIndex> connections;
+};
 struct Blob
 {
 	Rectangle rect;
@@ -248,23 +189,8 @@ struct ShapeRLE {
 	Rectangle bounds;
 	std::vector<std::vector<Range>> rowRanges;
 };
-struct FillNodeIndex
-{
-	int y;
-	int i;
-};
-struct FillNode
-{
-	bool walked;
-	bool joined;
-	int id;
-	FillNodeIndex index;
-	int x1;
-	int x2;
-	int len;
-	std::vector<int> ids;
-	std::vector<FillNodeIndex> connections;
-};
+
+
 struct BlobFrame
 {
 	std::vector<Blob> blobs;
@@ -320,18 +246,18 @@ struct ViewState
 {
 
 };
-
-struct StereoLensDistortion {
-	LensDistortion left;
-	LensDistortion right;
+struct PolyN {
+	int n;
+	float a;
+	float b;
+	float c;
+	float d;
+	float e;
 };
-struct LensDistortion {
-	FloatVec2 translation;
-	Poly3 distortion3;
-	Poly4 distortion4;
-	Poly5 distortion5;
+struct Poly2 {
+	float a;
+	float b;
 };
-
 struct Poly3 {
 	float a;
 	float b;
@@ -352,7 +278,29 @@ struct Poly5 {
 	float d;
 	float e;
 };
+struct LensDistortion {
+	FloatVec2 translation;
+	Poly2 distortion2;
+	Poly3 distortion3;
+	Poly4 distortion4;
+	Poly5 distortion5;
+};
+struct StereoLensDistortion {
+	LensDistortion left;
+	LensDistortion right;
+};
 
+
+struct CellQuad {
+	FloatVec2 botLeft;
+	FloatVec2 topLeft;
+	FloatVec2 botRight;
+	FloatVec2 topRight;
+};
+struct GridCell {
+	ShapeRLE shape;
+	CellQuad quad;
+};
 struct Grid {
 	FloatRectangle bounds;
 	std::array<std::array<FloatVec2, 11>, 11> linePointMat;
@@ -378,17 +326,9 @@ struct FloatQuad {
 	std::array<FloatVec2, 4> vertices;
 };
 
-struct CellQuad {
-	FloatVec2 botLeft;
-	FloatVec2 topLeft;
-	FloatVec2 botRight;
-	FloatVec2 topRight;
-};
 
-struct GridCell {
-	ShapeRLE shape;
-	CellQuad quad;
-};
+
+
 
 /*
 struct PerimeterSearch

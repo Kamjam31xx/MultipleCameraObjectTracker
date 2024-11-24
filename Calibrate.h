@@ -12,6 +12,8 @@
 #include "Values.h"
 #include "ImgProc.h"
 #include "Presets.h"
+#include "LinearRegression.h"
+#include "GaussNewton.h"
 
 bool AXGreaterThanBX(const FloatVec2& a, const FloatVec2& b) {
 	return a.x > b.x;
@@ -346,54 +348,9 @@ namespace Calibrate {
 				}
 
 				// for each cell walls points, fit a line to the point data
-				std::vector<Float64SlopeIntercept> slopeIntercepts = std::vector<Float64SlopeIntercept>(0);
-				std::vector<int> failureIndices = std::vector<int>(0);
-				double rotationStepSize = 17.3;
-				int rotationStep = 1;
-				for (int h = 0; h < wallsPoints.size(); h++) {
-					bool hasFailed = false;
-					double rotation = rotationStep * rotationStepSize;
-					while (true) {
-						double xSum = 0;
-						double ySum = 0;
-						double xySum = 0;
-						double x2Sum = 0;
-						int pointCount = wallsPoints[h].size();
-						for (int k = 0; k < wallsPoints[h].size(); k++) {
-							double x = (wallsPoints[h][k].x * cos(rotation)) - (wallsPoints[h][k].y * sin(rotation));
-							double y = (wallsPoints[h][k].y * cos(rotation)) + (wallsPoints[h][k].x * sin(rotation));
-							xSum += x;
-							ySum += y;
-							xySum += x * y;
-							x2Sum += x * x;
-						}
-						double numerator = (pointCount * xySum) - (xSum * ySum);
-						double denominator = (pointCount * x2Sum) - (xSum * xSum);
-						double thresh = 0.0000000000000001;
-						bool denominatorTooSmall = denominator <= thresh && denominator >= -thresh;
-						bool numeratorTooSmall = numerator <= thresh && numerator >= -thresh;
-						if (denominatorTooSmall || numeratorTooSmall) {
-							// has failed -> change rotation and reset
-							hasFailed = true;
-							break;
-						}
-						double slope = numerator / denominator;
-						bool slopeTooSmall = slope <= thresh && slope >= -thresh;
-						if (slopeTooSmall) {
-							// has failed -> change rotation and reset
-							hasFailed = true;
-							break;
-						}
-						double intercept = (ySum - (slope * xSum)) / pointCount;
-						slopeIntercepts.push_back(Float64SlopeIntercept{ slope, intercept });
-						break;
-					}
-					if (hasFailed) {
-						h = -1; // set h to 0
-						slopeIntercepts = std::vector<Float64SlopeIntercept>(0);
-						rotationStep++;
-					}
-				}
+				std::tuple<std::vector<Float64SlopeIntercept>, Degrees> slopeInterceptsAndRotation = LinearRegressionMultiR2D2(wallsPoints, 17.3f);
+				std::vector<Float64SlopeIntercept>& slopeIntercepts = std::get<0>(slopeInterceptsAndRotation);
+				Degrees linesRotation = std::get<1>(slopeInterceptsAndRotation);
 
 				// find intersections and emit vertices, then rotate back.
 				std::vector<FloatVec2> vertices = std::vector<FloatVec2>(0);
@@ -416,7 +373,7 @@ namespace Calibrate {
 							continue;
 						}
 						// rotate vertices back to origin while still represented as doubles
-						double reverseRotation = -1.0 * (rotationStep * rotationStepSize);
+						double reverseRotation = -1.0 * linesRotation;
 						double x = (x * cos(reverseRotation)) - (y * sin(reverseRotation));
 						double y = (y * cos(reverseRotation)) + (x * sin(reverseRotation));
 						vertices.push_back(FloatVec2{ x, y });
@@ -524,7 +481,7 @@ namespace Calibrate {
 	}
 
 	// takes known measurements and returns the corresponding grid for those measurements
-	Grid CalculateGrid(float xFov, IntVec2 imgSize, FloatVec2 sensorSizeInches, inches gridDistInches, inches gridSizeInches) {
+	Grid CalculateGrid(float xFov, IntVec2 imgSize, FloatVec2 sensorSizeInches, Inches gridDistInches, Inches gridSizeInches) {
 
 		float alpha = xFov * TO_RADIANS;
 		float a = sensorSizeInches.x / 2.0f;
@@ -559,96 +516,15 @@ namespace Calibrate {
 		// calculate the magnitudes to use for radial distortion summing
 		std::vector<double> xi = Magnitudes(reference.linePointMat);
 		std::vector<double> yi = Magnitudes(distorted.linePointMat);
-		int numResiduals = xi.size();
 
-		// note that m functions can be greater than n betas, as there may be more partial derivatives than betas
-		int n = 3; // number of betas
-		int m = 3; // number of functions
-		cv::Mat betas = (cv::Mat_<double>(n, 1) << 1.0, 0.2, 0.02);
-
-		// jacobian matrix of m functions and n residuals 
-		cv::Mat jacobian = cv::Mat(numResiduals, m, CV_64F);
-		cv::Mat residuals = cv::Mat(numResiduals, 1, CV_64F);
-		cv::Mat psuedoInverse;
-
-		// minimize the sum of squares of the residuals
-		double sum = 0.0;
-		while (true) {
-
-			// construct the jacobian for the residuals of m function partial derivatives with respect to the betas
-			SetJacobian(jacobian, xi, yi, betas, Poly3StandardPartials);
-			cv::invert(jacobian, psuedoInverse); // note : check flags 
-			CalcResiduals(residuals, xi, yi, betas, Poly3StandardResiduals);
-
-			// calculate the new betas
-			betas = betas - (psuedoInverse * residuals);
-
-			// calculate the sum of squares of the residuals
-			sum = Poly3StandardSquareResiduals(residuals);
-			if (sum < 1.0) {
-				break;
-			}
-		}
-
-		output.distortion3 = Poly3{
-			betas.at<double>(0,0),
-			betas.at<double>(1,0),
-			betas.at<double>(2,0)
-		};
+		output.translation = { 0, 0 };
+		output.distortion2 = ToPoly2(GaussNewtonPolyN(xi, yi, 2));
+		output.distortion3 = ToPoly3(GaussNewtonPolyN(xi, yi, 3));
+		output.distortion4 = ToPoly4(GaussNewtonPolyN(xi, yi, 4));
+		output.distortion5 = ToPoly5(GaussNewtonPolyN(xi, yi, 5));
 
 		return output;
 	}
-
-	// construct the jacobian for the given x, y, betas, and partial derivative functions
-	// unsafe - size your inputs right
-	void SetJacobian(cv::Mat& out, std::vector<double>& xi, std::vector<double>& yi, cv::Mat& betas, std::function<double(double, double, int)> partials) {
-		int m = betas.rows;
-		for (int i = 0; i < xi.size; i++) {
-			for (int j = 0; j < m; j++) {
-				int k = j + (i * m);
-				out.at<double>(j, i) = partials(xi[k], yi[k], j);
-			}
-		}
-	}
-
-	// given the function for the residual using the betas of each xi yi, set the residuals result in the output column matrix
-	void CalcResiduals(cv::Mat& out, std::vector<double>& xi, std::vector<double>& yi, cv::Mat& betas, std::function<double(double, double, cv::Mat&)> residual) {
-		for (int i = 0; i < xi.size(); i++) {
-			out.at<double>(i, 0) = residual(xi[i], yi[i], betas);
-		}
-	}
-
-	// for the function x - (hy + ky^2 + uy^3)
-	double Poly3StandardPartials(double x, double y, int function) {
-		switch (function) {
-		case 0:
-			return x -(-y);
-		case 1:
-			return x -(pow(-y, 2));
-		case 2:
-			return x - (pow(-y, 3));
-		}
-		return 0.0;
-	}
-
-	// for the function x - (hy + ky^2 + uy^3)
-	double Poly3StandardResiduals(double x, double y, cv::Mat betas) {
-		double h = betas.at<double>(0, 0);
-		double k = betas.at<double>(1, 0);
-		double u = betas.at<double>(2, 0);
-		return x - ((h * y) + (k * pow(y, 2) + (u * pow(y, 3))));
-	}
-
-	// for the function x - (hy + ky^2 + uy^3)
-	double Poly3StandardSquareResiduals(cv::Mat residuals) {
-		double sum = 0.0;
-		for (int i = 0; i < residuals.rows; i++) {
-			sum += pow(residuals.at<double>(i, 0), 2);
-		}
-		return sum;
-	}
-
-
 
 	// returns the magnitudes of the vectors for each point in the linePointMat
 	std::vector<double> Magnitudes(std::array<std::array<FloatVec2, 11>,11> input) {
@@ -689,9 +565,9 @@ namespace Calibrate {
 
 		// approximate the undistorted left and right grids based on known measurements
 		OV9750 cam = OV9750{};
-		inches gridDistance = 0.0f;
+		Inches gridDistance = 0.0f;
 		Grid undistortedLeft = CalculateGrid(cam.xFovDegrees, cam.imageSize, FloatVec2{ cam.width, cam.height }, gridDistance, gridSize);
-		Grid undistortedRight = CalculateGrid();
+		Grid undistortedRight = CalculateGrid(cam.xFovDegrees, cam.imageSize, FloatVec2{ cam.width, cam.height }, gridDistance, gridSize);
 
 		// fit curves to the thing or whatever
 		LensDistortion distortionLeft = LensDistortionForGrids(gridLeft, undistortedLeft);

@@ -27,6 +27,15 @@
     <ClCompile Include="EntityManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MultiTracker2D.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\Glad_GL4\src\glad.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Shader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DeltaTime.h">
@@ -53,12 +62,6 @@
     <ClInclude Include="Keyboard.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="PolynomialRegression.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="PolyFit.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="LinearRegression.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -71,5 +74,55 @@
     <ClInclude Include="Presets.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ImageProcessSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TrackingSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="LogSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="AppSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RenderSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CaptureSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CameraSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CalibrationSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GaussNewton.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MultiTracker2D.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CallbacksGLFW.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Vertices.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Shader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Standard.frag">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="Standard.vert">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="Standard.geom">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

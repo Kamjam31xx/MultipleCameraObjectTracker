@@ -21,6 +21,15 @@ use splines for continuation prediction (quadratic continuation)
 
 */
 
+
+/*
+	add blob to blob manhattan distance -> to -> nearest neighbor mass & nearest neighbor center of mass -> check if that matches temporal past blobs
+	- aka a blob gets split into 2 blobs, detect if adding 2 blobs brings back an abstraction resembling that blobby-boi
+*/
+
+
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 #include "opencv2/opencv.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
@@ -43,41 +52,93 @@ use splines for continuation prediction (quadratic continuation)
 #include "ImgProc.h"
 #include "Keyboard.h"
 
+#include "Shader.h"
+
+#include "CallbacksGLFW.h"
+
 DeltaTime Timer;
 DeltaTime VelocityTimer;
 FrameRate FPS = FrameRate(10);
 
-cv::VideoCapture cap(0);
+cv::VideoCapture cap(1);
 
-CameraSettings camera = CameraSettings();
-ProcessSettings process = ProcessSettings();
+AppSettings settings = AppSettings{};
 
+ImageProcessSettings imgProcessing = ImageProcessSettings{};
+TrackingSettings tracking = TrackingSettings{};
+LogSettings logging = LogSettings{};
+RenderSettings rendering = RenderSettings{};
+CaptureSettings capturing = CaptureSettings{};
+CalibrationSettings calibration = CalibrationSettings{};
+
+CameraSettings frontCamera = CameraSettings{ -8.50f, 2, 2560 / 2, 960 / 2 };
+
+void InitSettings() {
+	settings = AppSettings{
+		TRACKING_MODE,
+		&imgProcessing,
+		&tracking,
+		&logging,
+		&rendering,
+		&capturing,
+		&calibration,
+		std::vector<CameraSettings*>{&frontCamera}
+	};
+}
 
 int main()
 {
-	/*
-		add blob to blob manhattan distance -> to -> nearest neighbor mass & nearest neighbor center of mass -> check if that matches temporal past blobs
-		- aka a blob gets split into 2 blobs, detect if adding 2 blobs brings back an abstraction resembling that blobby-boi
-	*/
-
-	if (cap.isOpened() != true)
-	{
-		std::cout << "cap is not opened" << std::endl;
+	InitSettings();
+	if (!glfwInit()) {
 		return -1;
 	}
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	GLFWwindow* window = glfwCreateWindow(1230, 480, "window", NULL, NULL);
+
+	if (!window) {
+		glfwTerminate();
+		std::cout << "!window == true" << std::endl;
+		return -2;
+	}
+
+	glfwMakeContextCurrent(window);
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+		glfwTerminate();
+		std::cout << "gladLoader failure" << std::endl;
+		return -3;
+	}
+	glfwSetErrorCallback(error_callback);
+	if (cap.isOpened() != true) {
+		std::cout << "cap is not opened" << std::endl;
+		return -4;
+	}
+
+	// double time = glfwGetTime(); // typically the most accurate time source on each platform
+	int winWidth;
+	int winHeight;
+	glfwGetFramebufferSize(window, &winWidth, &winHeight);
+	glViewport(0, 0, winWidth, winHeight);
+	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+	glfwSwapInterval(0); // set to 1 for vsync
+	// glfwWaitEvents // see docs https://www.glfw.org/docs/latest/group__window.html#ga554e37d781f0a997656c26b2c56c835e
+
+	Shader shader;
+	shader.CreateFromFiles("/Standard.vert", "/standard.frag", nullptr);
 
 	cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 0);
-	cap.set(cv::CAP_PROP_EXPOSURE, camera.exposure);
-	cap.set(cv::CAP_PROP_FRAME_HEIGHT, camera.height);
-	cap.set(cv::CAP_PROP_FRAME_WIDTH, camera.width);
+	cap.set(cv::CAP_PROP_EXPOSURE, frontCamera.exposure);
+	cap.set(cv::CAP_PROP_FRAME_HEIGHT, frontCamera.height);
+	cap.set(cv::CAP_PROP_FRAME_WIDTH, frontCamera.width);
 
 	int front = 0;
 	std::vector<cv::Mat> frame = { cv::Mat(), cv::Mat() };
 	std::vector<cv::Mat> detect = { cv::Mat(), cv::Mat() };
 	std::vector<cv::Mat> blurredFrame = { cv::Mat(), cv::Mat() };
 	std::vector<cv::Mat> lightMaskFrame = { cv::Mat(), cv::Mat() };
-	cv::Mat erosionElement = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(2 * process.erosion + 1, 2 * process.erosion + 1));
-	cv::Mat dilationElement = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(2 * process.dilation + 1, 2 * process.dilation + 1));
+	cv::Mat erosionElement = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(2 * imgProcessing.erosion + 1, 2 * imgProcessing.erosion + 1));
+	cv::Mat dilationElement = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(2 * imgProcessing.dilation + 1, 2 * imgProcessing.dilation + 1));
 
 	std::array<cv::Mat, 2> fillSource = { cv::Mat(), cv::Mat() };
 	std::array<cv::Mat, 2> fillResult = { cv::Mat(), cv::Mat() };
@@ -96,40 +157,38 @@ int main()
 
 	cv::waitKey(100);
 
-	for (bool play = true; play;)
-	{
+	while (!glfwWindowShouldClose(window)) {
+		
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glfwSwapBuffers(window);
+		glfwPollEvents();
 
-		HandleKeyboard(process, camera, Timer, cap);
+		HandleKeyboard(Timer, cap, settings);
 
-		if (process.wait)
-		{
-			if (process.advanceFrame)
-			{
+		if (capturing.wait) {
+			if (capturing.advanceFrame) {
 				cap >> frame[front];
-				process.frameAdvanced = true;
-				process.advanceFrame = false;
+				capturing.frameAdvanced = true;
+				capturing.advanceFrame = false;
 			}
 		}
-		else
-		{
+		else {
 			cap >> frame[front];
 		}
 
 
-		if (frame.empty())
-		{
+		if (frame.empty()) {
 			break;
 		}
-		else
-		{
+		else {
 			// IMPLEMENT FUNCTION POINTERS TO ELIMINATE BRANCHING
 			cv::cvtColor(frame[front], detect[front], cv::COLOR_BGR2GRAY);
-			if (process.blur) {
-				cv::GaussianBlur(frame[front], frame[front], process.kernelSize, 0);
+			if (imgProcessing.blur) {
+				cv::GaussianBlur(frame[front], frame[front], imgProcessing.kernelSize, 0);
 			}
 			cv::Mat derivativeMap;
-			if (process.sobel)
-			{
+			if (imgProcessing.sobel) {
 				cv::Mat dx;
 				cv::Mat dy;
 
@@ -145,18 +204,18 @@ int main()
 				cv::add(dx_abs, dy_abs, derivativeMap);
 			}
 
-			cv::threshold(detect[front], detect[front], process.threshold, process.thresholdMax, cv::THRESH_BINARY);
+			cv::threshold(detect[front], detect[front], imgProcessing.threshold, imgProcessing.thresholdMax, cv::THRESH_BINARY);
 
-			if (process.sobel)
+			if (imgProcessing.sobel)
 			{
 				cv::subtract(255, derivativeMap, derivativeMap);
-				cv::threshold(derivativeMap, derivativeMap, process.sobelThresh, process.thresholdMax, cv::THRESH_BINARY);
+				cv::threshold(derivativeMap, derivativeMap, imgProcessing.sobelThresh, imgProcessing.thresholdMax, cv::THRESH_BINARY);
 				derivativeMap.copyTo(detect[front]);
 			}
-			if (process.erode) {
+			if (imgProcessing.erode) {
 				cv::erode(detect[front], detect[front], erosionElement);
 			}
-			if (process.dilate) {
+			if (imgProcessing.dilate) {
 				cv::dilate(detect[front], detect[front], dilationElement);
 			}
 			cv::cvtColor(detect[front], fillResult[front], cv::COLOR_GRAY2BGR);
@@ -166,6 +225,7 @@ int main()
 			leftCamera[front] = cv::Mat(fillResult[front], cv::Rect(0, 0, width, height));
 			rightCamera[front] = cv::Mat(fillResult[front], cv::Rect(width, 0, width, height));
 
+			// replace with bounds per function to avoid copying and stuff
 			leftCamera[front].copyTo(leftResult[front]);
 			rightCamera[front].copyTo(rightResult[front]);
 
@@ -181,61 +241,63 @@ int main()
 				std::vector<std::vector<FillNode>>(rightCamera[front].cols, std::vector<FillNode>())
 			};
 
-			GetBlobs(&leftCamera[front], &leftResult[front], 255, process.areaMinSize, leftNow);
-			GetBlobs(&rightCamera[front], &rightResult[front], 255, process.areaMinSize, rightNow);
-
-			cv::waitKey(2);
+			GetBlobs(&leftCamera[front], &leftResult[front], 255, tracking.areaMinSize, leftNow);
+			GetBlobs(&rightCamera[front], &rightResult[front], 255, tracking.areaMinSize, rightNow);
 
 			VelocityTimer.tick();
 			float deltaTime = VelocityTimer.getDeltaMilliSeconds();
-			if (process.color)
+			if (rendering.color)
 			{
-				ColorTrack_Test(&leftResult[front], lastLeft, leftNow, deltaTime, process);
-				ColorTrack_Test(&rightResult[front], lastRight, rightNow, deltaTime, process);
+				ColorTrack_Test(&leftResult[front], lastLeft, leftNow, deltaTime, tracking);
+				ColorTrack_Test(&rightResult[front], lastRight, rightNow, deltaTime, tracking);
 			}
 
 			cv::subtract(255, leftResult[front], leftResult[front]);
 			cv::subtract(255, rightResult[front], rightResult[front]);
 
-			cv::waitKey(2);
+			cv::waitKey(1);
 
 			cv::imshow("_____< left >_____", leftResult[front]);
 			cv::imshow("_____< right >_____", rightResult[front]);
 
 			lastLeft = leftNow;
 			lastRight = rightNow;
+
+			glfwSwapBuffers(window);
 		}
 
 
 
-		char c = (char)cv::waitKey(process.cvwait + (process.lag * process.cvwait * 128));
+		char c = (char)cv::waitKey(capturing.cvwait + (capturing.lag * capturing.cvwait * 128));
 
 
 
 
 		Timer.tick();
 		FPS.pushFrameTime(Timer.getDeltaMilliSeconds());
-		process.logTime += float(Timer.getDeltaMilliSeconds() / 1000.0);
+		logging.logTime += float(Timer.getDeltaMilliSeconds() / 1000.0);
 
 
-		if (process.logTime >= process.logRate)
+		if (logging.logTime >= logging.logRate)
 		{
 			std::cout << "t=" + std::to_string(Timer.getDeltaMilliSeconds()) + " r=" + std::to_string(FPS.getRate());
-			if (process.frameAdvanced)
+			if (capturing.frameAdvanced)
 			{
 				std::cout << "    -    advanced frame";
-				process.frameAdvanced = false;
+				capturing.frameAdvanced = false;
 			}
-			else if (process.wait)
+			else if (capturing.wait)
 			{
 				std::cout << "    -    waiting...";
 			}
 			std::cout << std::endl;
-			process.logTime = 0.0;
+			logging.logTime = 0.0;
 		}
 
 
 	}
+
+	glfwTerminate();
 
 	cap.release();
 

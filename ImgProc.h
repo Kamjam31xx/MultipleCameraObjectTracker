@@ -23,7 +23,70 @@
 #include "DeltaTime.h"
 #include "FrameRate.h"
 #include "Utils.h"
+#include "AppSettings.h"
 
+Poly2 ToPoly2(PolyN in) {
+	return Poly2{ in.a, in.b };
+}
+Poly3 ToPoly3(PolyN in) {
+	return Poly3{ in.a, in.b , in.c };
+}
+Poly4 ToPoly4(PolyN in) {
+	return Poly4{ in.a, in.b, in.c, in.d };
+}
+Poly5 ToPoly5(PolyN in) {
+	return Poly5{ in.a, in.b, in.c, in.d, in.e };
+}
+inline bool ContainsCoord(std::vector<PixelCoord>& pixels, PixelCoord val) {
+	for (PixelCoord px : pixels) {
+		if (px.x == val.x && px.y == val.y) {
+			return true;
+		}
+	}
+	return false;
+}
+inline bool PixelInBounds(PixelCoord* p, int width, int height)
+{
+	if ((p->x >= 0) && (p->x < width) && (p->y >= 0) && (p->y < height))
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+inline bool PixelInBounds(PixelCoord p, int width, int height)
+{
+	if ((p.x >= 0) && (p.x < width) && (p.y >= 0) && (p.y < height))
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+inline bool Walkable(cv::Mat& mat, PixelCoord in, int threshold)
+{
+	return PixelInBounds(in, mat.rows, mat.cols) ? bool(mat.at<cv::Vec3b>(in.x, in.y)[0] > threshold) : false;
+}
+inline bool Blocked(cv::Mat& mat, PixelCoord in, int threshold)
+{
+	return !PixelInBounds(in, mat.rows, mat.cols) ? bool(mat.at<cv::Vec3b>(in.x, in.y)[0] > threshold) : false;
+}
+inline bool IsSame(PixelCoord a, PixelCoord b) {
+	return a.x == b.x && a.y == b.y;
+}
+inline bool IsSame(IntVec2 a, IntVec2 b) {
+	return a.x == b.x && a.y == b.y;
+}
+inline IntLine SwapAB(IntLine input) {
+	return IntLine{ input.b, input.a };
+}
+inline PixelCoord Add(PixelCoord a, PixelCoord b) {
+	return PixelCoord{ a.x + b.x, a.y + b.y };
+}
 bool PointIsInCornerPinRect(CornerPinRect* bounds, int x, int y)
 {
 	if (x > bounds->x && x < bounds->x + bounds->w && y > bounds->y && y < bounds->y + bounds->h)
@@ -69,29 +132,6 @@ inline void MulColorPixel(cv::Mat* img, PixelCoord px, ColorRGBi c)
 	(*img).at<cv::Vec3b>(px.x, px.y)[0] *= c.blue;
 	(*img).at<cv::Vec3b>(px.x, px.y)[1] *= c.green;
 	(*img).at<cv::Vec3b>(px.x, px.y)[2] *= c.red;
-}
-
-inline bool PixelInBounds(PixelCoord* p, int width, int height)
-{
-	if ((p->x >= 0) && (p->x < width) && (p->y >= 0) && (p->y < height))
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
-inline bool PixelInBounds(PixelCoord p, int width, int height)
-{
-	if ((p.x >= 0) && (p.x < width) && (p.y >= 0) && (p.y < height))
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
 }
 
 bool aInB(std::vector<PixelCoord>* a, PixelCoord xIntercept)
@@ -210,13 +250,13 @@ inline float MinRatio(int a, int xIntercept)
 {
 	return (a > xIntercept) ? (a / xIntercept) : (xIntercept / a);
 }
-inline float Distance(FloatVec2 a, FloatVec2 xIntercept)
+/*inline float Distance(FloatVec2 a, FloatVec2 xIntercept)
 {
 	float x = a.x - xIntercept.x;
 	float y = a.y - xIntercept.y;
 
 	return std::sqrt((x * x) + (y * y));
-}
+}*/
 inline float Distance(int aX, int aY, int bX, int bY)
 {
 	float x = abs(aX) - abs(bX);
@@ -296,7 +336,7 @@ inline float QuadScore3D(float max, FloatVec3 a, FloatVec3 xIntercept, FloatVec3
 
 
 // float deltaTime, int areaCheckThreshold, float distScale, float posMod, float areaMod, float rectMod, float rectRatioMod, float postModPAR, float discard, float accept
-inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, float _dt, ProcessSettings _proc)
+inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, float _dt, TrackingSettings _tracking)
 {
 
 	struct ScoreIdx
@@ -316,13 +356,13 @@ inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, fl
 	{
 		Blob& cur = _now.blobs[i];
 		//  per blob  ->  compare against previous blobs
-		if (cur.area >= _proc.areaMinSize)
+		if (cur.area >= _tracking.areaMinSize)
 		{
 			for (int j = 0; j < _last.blobs.size(); j++)
 			{
 				Blob& old = _last.blobs[j];
 
-				if (old.area >= _proc.areaMinSize)
+				if (old.area >= _tracking.areaMinSize)
 				{
 					FloatVec2& centerA = cur.centerOfArea;
 					FloatVec2& centerB = old.centerOfArea;
@@ -340,11 +380,11 @@ inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, fl
 					float wMod = 1.0; // wRatio* aSize.width + 1.0; // fatness fuckers
 					float hMod = 1.0; // hRatio* aSize.height + 1.0; // fatness fuckers brudder
 
-					float posScore = QuadScore2D(posWeight, centerA, centerB, FloatVec2{ wMod , hMod }, _proc.distMod);
-					float areaScore = QuadScore1D(areaWeight, cur.area, old.area, _proc.areaMod);
-					float rectScore = QuadScore2D(rectWeight, dimA, dimB, FloatVec2{ 1.0,1.0 }, _proc.rectMod);
+					float posScore = QuadScore2D(posWeight, centerA, centerB, FloatVec2{ wMod , hMod }, _tracking.distMod);
+					float areaScore = QuadScore1D(areaWeight, cur.area, old.area, _tracking.areaMod);
+					float rectScore = QuadScore2D(rectWeight, dimA, dimB, FloatVec2{ 1.0,1.0 }, _tracking.rectMod);
 
-					float n = (_proc.postMod * posScore * (areaScore + rectScore)) + (_proc.distScale * posScore);
+					float n = (_tracking.postMod * posScore * (areaScore + rectScore)) + (_tracking.distScale * posScore);
 
 					// generate vector OR vectors or curve to represent the past path of the blob
 					// v1 - v2 = vector between them
@@ -355,7 +395,7 @@ inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, fl
 					FloatVec2 v1 = FloatVec2{ old.centerOfArea.x - cur.centerOfArea.x, old.centerOfArea.y - cur.centerOfArea.y };
 					float velocity2D = _dt * sqrt((v1.x * v1.x) + (v1.y * v1.y));
 
-					if (n > _proc.discardThreshold)
+					if (n > _tracking.discardThreshold)
 					{
 						initialized[i] = true;
 						scores[i].push_back(ScoreIdx{ j, n });
@@ -388,7 +428,7 @@ inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, fl
 					j = score.j;
 
 
-					if (biggest > _proc.acceptThreshold)
+					if (biggest > _tracking.acceptThreshold)
 					{
 						break;
 					}
@@ -577,34 +617,92 @@ std::vector<PixelCoord> PerimeterPixels(cv::Mat& img, PixelCoord start)
 
 	return outlinePx;
 }
-inline bool ContainsCoord(std::vector<PixelCoord>& pixels, PixelCoord val) {
-	for (PixelCoord px : pixels) {
-		if (px.x == val.x && px.y == val.y) {
-			return true;
+
+// for each pixel, test left and right pixels color to determine if its a perimeter
+// pixel for a shape with respect to the x axis.
+std::vector<std::vector<PerimeterPoint>> PerimeterPointsAxisX(cv::Mat* in, int colorMax, int xMax, int yMax) {
+
+	int colorStep = round(colorMax / 2) - 1;
+	int xLim = in->rows - 1;
+	int yLim = in->cols;
+	std::vector<std::vector<PerimeterPoint>> points(in->cols, std::vector<PerimeterPoint>());
+
+	//use for non branching code in the future, using resulting bool to multiple the index. index 0 will be junk to discard
+	//std::vector<int> ySize = std::vector<int>(in->cols);
+
+	// handle left edge at x = 0
+	for (int y = 0; y < yLim; y++) {
+		if ((in->at<cv::Vec3b>(0, y)[0] == colorMax) && (in->at<cv::Vec3b>(1, y)[0] == colorMax)) {
+			points[y].push_back(PerimeterPoint(0));
 		}
 	}
-	return false;
+
+	// handle inbetween left and right edge
+	for (int x = 1; x < xLim; x++) {
+		for (int y = 0; y < yLim; y++) {
+			if ((in->at<cv::Vec3b>(x, y)[0] == colorMax) && ((!(in->at<cv::Vec3b>(x - 1, y)[0] == colorMax) + !(in->at<cv::Vec3b>(x + 1, y)[0] == colorMax)) == 1)) {
+				points[y].push_back(PerimeterPoint{ x });
+			}
+		}
+	}
+
+	// handle right edge at x = xLim 
+	for (int y = 0; y < yLim; y++) {
+		if ((in->at<cv::Vec3b>(xLim, y)[0] == colorMax) && (in->at<cv::Vec3b>(xLim - 1, y)[0] == colorMax)) {
+			points[y].push_back(PerimeterPoint(xLim));
+		}
+	}
+
+	return points;
 }
-inline bool Walkable(cv::Mat& mat, PixelCoord in, int threshold)
-{
-	return PixelInBounds(in, mat.rows, mat.cols) ? bool(mat.at<cv::Vec3b>(in.x, in.y)[0] > threshold) : false;
+// for each pixel, test left and right pixels color to determine if its a perimeter
+// pixel for a shape with respect to the x axis.
+std::vector<std::vector<PerimeterPoint>> PerimeterPointsAxisX_Expirimental(cv::Mat* in, int colorMax, int xMax, int yMax) {
+
+	int colorStep = round(colorMax / 2) - 1;
+	int xLim = in->rows - 1;
+	int yLim = in->cols;
+	std::vector<std::vector<PerimeterPoint>> points(in->cols, std::vector<PerimeterPoint>(xMax / 2));
+	std::vector<int> ySize = std::vector<int>(in->cols);
+	for (int i = 0; i < in->cols; i++) {
+		ySize[i] = 1;
+		points[i][0] = 0;
+	}
+
+	// handle left edge at x = 0
+	for (int y = 0; y < yLim; y++){
+		bool record = (in->at<cv::Vec3b>(0, y)[0] == colorMax) && (in->at<cv::Vec3b>(1, y)[0] == colorMax);
+		points[y][ySize[y] * record] = 0;
+		ySize[y] += record;
+	}
+
+	// handle inbetween left and right edge
+	for (int x = 1; x < xLim; x++){
+		for (int y = 0; y < yLim; y++){
+			bool record = (in->at<cv::Vec3b>(x, y)[0] == colorMax) && ((!(in->at<cv::Vec3b>(x - 1, y)[0] == colorMax) + !(in->at<cv::Vec3b>(x + 1, y)[0] == colorMax)) == 1);
+			points[y][ySize[y] * record] = x;
+			ySize[y] += record;
+		}
+	}
+
+	// handle right edge at x = xLim 
+	for (int y = 0; y < yLim; y++){
+		bool record = (in->at<cv::Vec3b>(xLim, y)[0] == colorMax) && (in->at<cv::Vec3b>(xLim - 1, y)[0] == colorMax);
+		points[y][ySize[y] * record] = xLim;
+		ySize[y] += record;
+	}
+
+	// move to result while discarding junk data
+	std::vector<std::vector<PerimeterPoint>> result(in->cols, std::vector<PerimeterPoint>(0));
+	for (int y = 0; y < in->cols; y++) {
+		std::vector<int>::const_iterator begin = points[y].begin() + 1;
+		std::vector<int>::const_iterator end = points[y].begin() + ySize[y];
+		result[y] = std::vector<PerimeterPoint>(begin, end);
+	}
+
+	return result;
 }
-inline bool Blocked(cv::Mat& mat, PixelCoord in, int threshold)
-{
-	return !PixelInBounds(in, mat.rows, mat.cols) ? bool(mat.at<cv::Vec3b>(in.x, in.y)[0] > threshold) : false;
-}
-inline bool IsSame(PixelCoord a, PixelCoord b) {
-	return a.x == b.x && a.y == b.y;
-}
-inline bool IsSame(IntVec2 a, IntVec2 b) {
-	return a.x == b.x && a.y == b.y;
-}
-inline IntLine SwapAB(IntLine input) {
-	return IntLine{ input.b, input.a };
-}
-inline PixelCoord Add(PixelCoord a, PixelCoord b) {
-	return PixelCoord{ a.x + b.x, a.y + b.y };
-}
+
 inline std::vector<ShapeRLE> ExtractShapesRLE(cv::Mat* in) {
 
 	// stores state
@@ -787,56 +885,24 @@ inline void GetBlobs(cv::Mat* in, cv::Mat* out, int max, int minSize, BlobFrame&
 	int xLim = in->rows - 1;
 	int yLim = in->cols;
 
-	std::queue<int> inspecting;
+	std::vector<std::vector<PerimeterPoint>> points = PerimeterPointsAxisX(in, max, in->rows - 1, in->cols);
 
-	std::vector<std::vector<PerimeterPoint>> points(in->cols, std::vector<PerimeterPoint>());
-	for (int y = 0; y < yLim; y++)
-	{
-
-		if ((in->at<cv::Vec3b>(0, y)[0] == max) && (in->at<cv::Vec3b>(1, y)[0] == max))
-		{
-			points[y].push_back(PerimeterPoint(0));
-		}
-	}
-
-	for (int x = 1; x < xLim; x++)
-	{
-		for (int y = 0; y < yLim; y++)
-		{
-			if ((in->at<cv::Vec3b>(x, y)[0] == max) && ((!(in->at<cv::Vec3b>(x - 1, y)[0] == max) + !(in->at<cv::Vec3b>(x + 1, y)[0] == max)) == 1))
-			{
-				points[y].push_back(PerimeterPoint{ x });
-			}
-		}
-	}
-
-	for (int y = 0; y < yLim; y++)
-	{
-		if ((in->at<cv::Vec3b>(xLim, y)[0] == max) && (in->at<cv::Vec3b>(xLim - 1, y)[0] == max))
-		{
-			points[y].push_back(PerimeterPoint(xLim));
-		}
-	}
-
+	// push the points into "nodes" and store them.
 	int id = 0;
-	for (int y = 0; y < points.size(); y++)
-	{
-		for (int i = 0; i < points[y].size(); i += 2)
-		{
+	for (int y = 0; y < points.size(); y++){
+		for (int i = 0; i < points[y].size(); i += 2){
 			frame.nodes[y].push_back(FillNode{ false, false, id++, FillNodeIndex{ y, i / 2 }, points[y][i], points[y][i + 1], points[y][i + 1] - points[y][i], std::vector<int>(), std::vector<FillNodeIndex>() });
 			frame.indices.push_back(FillNodeIndex{ y, i / 2 });
 		}
 	}
 
-	for (int y = 0; y < frame.nodes.size() - 1; y++)
-	{
+	// relate the nodes if the ranges intersect for y adjacent ranges.
+	// note : add x-most pixel from last span in the row to remove "walked" bool branching
+	for (int y = 0; y < frame.nodes.size() - 1; y++){
 		int y2 = y + 1;
-		for (int i = 0; i < frame.nodes[y].size(); i++)
-		{
-			for (int k = 0; k < frame.nodes[y2].size(); k++)
-			{
-				if (RangesIntersect(frame.nodes[y][i].x1, frame.nodes[y][i].x2, frame.nodes[y2][k].x1, frame.nodes[y2][k].x2))
-				{
+		for (int i = 0; i < frame.nodes[y].size(); i++){
+			for (int k = 0; k < frame.nodes[y2].size(); k++){
+				if (RangesIntersect(frame.nodes[y][i].x1, frame.nodes[y][i].x2, frame.nodes[y2][k].x1, frame.nodes[y2][k].x2)){
 					frame.nodes[y][i].connections.push_back(frame.nodes[y2][k].index);
 					frame.nodes[y2][k].connections.push_back(frame.nodes[y][i].index);
 				}
@@ -844,24 +910,18 @@ inline void GetBlobs(cv::Mat* in, cv::Mat* out, int max, int minSize, BlobFrame&
 		}
 	}
 
+	// dafuq
 	std::vector<FillNodeIndex> open;
-	for (int s = 0; s < frame.indices.size(); s++)
-	{
+	for (int s = 0; s < frame.indices.size(); s++){
 		Blob blob;
 		open.push_back(frame.indices[s]);
-
-		while (open.size())
-		{
+		while (open.size()){
 			FillNodeIndex index = open.back();
 			open.pop_back();
-
-			if (frame.nodes[index.y][index.i].walked == false)
-			{
+			if (frame.nodes[index.y][index.i].walked == false){
 				blob.indices.push_back(index);
 				frame.nodes[index.y][index.i].walked = true;
-
-				for (int c = 0; c < frame.nodes[index.y][index.i].connections.size(); c++)
-				{
+				for (int c = 0; c < frame.nodes[index.y][index.i].connections.size(); c++){
 					open.push_back(frame.nodes[index.y][index.i].connections[c]);
 				}
 			}
@@ -871,8 +931,7 @@ inline void GetBlobs(cv::Mat* in, cv::Mat* out, int max, int minSize, BlobFrame&
 
 	// get bounding rects & other stuff --- not setting mass and density cuz dont have info here
 	// color for funsies
-	for (int c = 0; c < frame.blobs.size(); c++)
-	{
+	for (int c = 0; c < frame.blobs.size(); c++){
 		ColorRGBi color = RandomColor();
 		frame.blobs[c].color = color;
 		std::vector<FillNodeIndex>& group = frame.blobs[c].indices;

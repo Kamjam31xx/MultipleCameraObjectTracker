@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -19,26 +19,45 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\..\..\Glad_GL4\src\glad.c" />
     <ClCompile Include="DeltaTime.cpp" />
     <ClCompile Include="EntityManager.cpp" />
     <ClCompile Include="FrameRate.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="MultiTracker2D.cpp" />
+    <ClCompile Include="Shader.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CalibrationSettings.h" />
+    <ClInclude Include="CameraSettings.h" />
+    <ClInclude Include="CaptureSettings.h" />
+    <ClInclude Include="GaussNewton.h" />
+    <ClInclude Include="CallbacksGLFW.h" />
+    <ClInclude Include="LogSettings.h" />
+    <ClInclude Include="MultiTracker2D.h" />
+    <ClInclude Include="RenderSettings.h" />
+    <ClInclude Include="Vertices.h" />
+    <ClInclude Include="Shader.h" />
+    <ClInclude Include="TrackingSettings.h" />
+    <ClInclude Include="ImageProcessSettings.h" />
     <ClInclude Include="DeltaTime.h" />
     <ClInclude Include="EntityManager.h" />
     <ClInclude Include="FrameRate.h" />
     <ClInclude Include="EntityValues.h" />
     <ClInclude Include="Calibrate.h" />
+    <ClInclude Include="AppSettings.h" />
     <ClInclude Include="Presets.h" />
     <ClInclude Include="LinearRegression.h" />
-    <ClInclude Include="PolyFit.h" />
-    <ClInclude Include="PolynomialRegression.h" />
     <ClInclude Include="Keyboard.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="ImgProc.h" />
     <ClInclude Include="ImgProcTypes.h" />
     <ClInclude Include="Values.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Standard.frag" />
+    <None Include="Standard.geom" />
+    <None Include="Standard.vert" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
@@ -102,8 +121,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(OPENCV_DIR)\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(OPENCV_DIR)\x64\vc16\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(OPENCV_DIR)\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Glad_GL4\include;C:\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(OPENCV_DIR)\x64\vc16\lib;C:\glfw-3.4.bin.WIN64\lib-vc2019;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -153,13 +172,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>C:\glfw-3.4.bin.WIN64\include;C:\Glad_GL4\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>opencv_world470.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opencv_world470.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
