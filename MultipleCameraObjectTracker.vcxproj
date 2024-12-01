@@ -20,23 +20,36 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\..\Glad_GL4\src\glad.c" />
+    <ClCompile Include="..\..\..\..\..\ImGui\imgui\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="..\..\..\..\..\ImGui\imgui\backends\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="..\..\..\..\..\ImGui\imgui\imgui.cpp" />
+    <ClCompile Include="..\..\..\..\..\ImGui\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\..\..\..\..\ImGui\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\..\..\..\..\ImGui\imgui\imgui_widgets.cpp" />
     <ClCompile Include="DeltaTime.cpp" />
     <ClCompile Include="EntityManager.cpp" />
     <ClCompile Include="FrameRate.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MultiTracker2D.cpp" />
+    <ClCompile Include="ScreenQuad.cpp" />
     <ClCompile Include="Shader.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\..\..\ImGui\imgui\backends\imgui_impl_glfw.h" />
+    <ClInclude Include="..\..\..\..\..\ImGui\imgui\backends\imgui_impl_opengl3.h" />
+    <ClInclude Include="..\..\..\..\..\ImGui\imgui\backends\imgui_impl_opengl3_loader.h" />
+    <ClInclude Include="..\..\..\..\..\ImGui\imgui\imgui.h" />
+    <ClInclude Include="..\..\..\..\..\ImGui\imgui\imgui_internal.h" />
     <ClInclude Include="CalibrationSettings.h" />
     <ClInclude Include="CameraSettings.h" />
     <ClInclude Include="CaptureSettings.h" />
     <ClInclude Include="GaussNewton.h" />
     <ClInclude Include="CallbacksGLFW.h" />
+    <ClInclude Include="linmath.h" />
     <ClInclude Include="LogSettings.h" />
     <ClInclude Include="MultiTracker2D.h" />
     <ClInclude Include="RenderSettings.h" />
-    <ClInclude Include="Vertices.h" />
+    <ClInclude Include="ScreenQuad.h" />
     <ClInclude Include="Shader.h" />
     <ClInclude Include="TrackingSettings.h" />
     <ClInclude Include="ImageProcessSettings.h" />
@@ -121,7 +134,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(OPENCV_DIR)\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Glad_GL4\include;C:\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\ImGui\imgui;$(OPENCV_DIR)\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Glad_GL4\include;C:\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(OPENCV_DIR)\x64\vc16\lib;C:\glfw-3.4.bin.WIN64\lib-vc2019;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -172,7 +185,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\glfw-3.4.bin.WIN64\include;C:\Glad_GL4\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\glfw-3.4.bin.WIN64\include;C:\Glad_GL4\include;C:\ImGui\imgui;C:\ImGui\imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

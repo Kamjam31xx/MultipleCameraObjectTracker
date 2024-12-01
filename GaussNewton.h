@@ -134,6 +134,8 @@ PolyN GaussNewtonBriggsPolyN(std::vector<double> xi, std::vector<double> yi, int
 			sumX += xi[j];
 			sumY += yi[j];
 		}
+		xj.push_back(sumX / numElements);
+		yj.push_back(sumY / numElements);
 	}
 	
 	return GaussNewtonPolyN(xj, yj, n);

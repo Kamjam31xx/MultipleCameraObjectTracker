@@ -22,10 +22,8 @@ float FrameRate::getRate()
 
 void FrameRate::pushFrameTime(float frameTime)
 {
-	if (frameTimes.size() > length)
-	{
+	frameTimes.push_back(frameTime);
+	while (frameTimes.size() > length && frameTimes.size()) {
 		frameTimes.erase(frameTimes.begin());
 	}
-
-	frameTimes.push_back(frameTime);
 }

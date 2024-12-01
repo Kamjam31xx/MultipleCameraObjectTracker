@@ -65,7 +65,7 @@ namespace Calibrate {
 		FloatVec2 estimatedSizeMax = { sizeModifier * xSpan / 10.0f, sizeModifier * ySpan / 10.0f };
 		
 		bool acceptable = false;
-		ShapeRLE closest = shapes.front;
+		ShapeRLE closest = shapes.front();
 		float smallest = std::numeric_limits<float>::max();
 		for (ShapeRLE s : shapes) {
 			if (estimatedSizeMax.x > s.width && estimatedSizeMax.y > s.height) {
@@ -243,7 +243,7 @@ namespace Calibrate {
 
 		// generate per-pixel permimeter paths for each grid cells corresponding shape
 		std::vector<LinePerimeter> perimeterPaths = std::vector<LinePerimeter>(cellCount);
-		PixelCoord px = PixelCoord{ floorf(bounds.xMin), floorf(bounds.yMin) };
+		PixelCoord px = PixelCoord{ static_cast<int>(floorf(bounds.xMin)), static_cast<int>(floorf(bounds.yMin)) };
 		std::vector<CellQuad> gridCellQuads = std::vector<CellQuad>(cellCount);
 		int cellQuadIndex = 0;
 		for (int i : cellShapeIndices) {
@@ -343,7 +343,7 @@ namespace Calibrate {
 				for (std::vector<IntLine> segs : cellWalls) {
 					wallsPoints.push_back(std::vector<IntVec2>{segs[0].a});
 					for (IntLine seg : segs) {
-						wallsPoints[wallsPoints.begin].push_back(seg.b);
+						wallsPoints[wallsPoints.size() - 1].push_back(seg.b); // /////////// ????????????????????????????????????????????? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? <<<<<<<<<<<<<<<
 					}
 				}
 
@@ -376,7 +376,7 @@ namespace Calibrate {
 						double reverseRotation = -1.0 * linesRotation;
 						double x = (x * cos(reverseRotation)) - (y * sin(reverseRotation));
 						double y = (y * cos(reverseRotation)) + (x * sin(reverseRotation));
-						vertices.push_back(FloatVec2{ x, y });
+						vertices.push_back(FloatVec2{ static_cast<float>(x), static_cast<float>(y) });
 					}
 				}
 
@@ -470,14 +470,14 @@ namespace Calibrate {
 				ySum /= vertices.size();
 
 				// store resulting point
-				gridLinePoints[i][j] = FloatVec2{ xSum, ySum };
+				gridLinePoints[i][j] = FloatVec2{ static_cast<float>(xSum), static_cast<float>(ySum) };
 
 			}
 		}
 		
 
 
-		return Grid{ FloatRectangle{bounds.xMin, bounds.yMin, bounds.xMax, bounds.yMax}, gridLinePoints, gridCells, center };
+		return Grid{ FloatRectangle{float(bounds.xMin), float(bounds.yMin), float(bounds.xMax), float(bounds.yMax)}, gridLinePoints, gridCells, center };
 	}
 
 	// takes known measurements and returns the corresponding grid for those measurements

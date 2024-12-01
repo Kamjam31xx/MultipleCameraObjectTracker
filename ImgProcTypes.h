@@ -1,6 +1,8 @@
 #pragma once
 
 #include <vector>
+#include <string>
+#include <array>
 
 struct Float64SlopeIntercept {
 	double m;
@@ -11,15 +13,35 @@ struct Float64SlopeInterceptRotation {
 	double b;
 	double degrees;
 };
+struct Float32SlopeInterceptRotation {
+	float m;
+	float b;
+	float degrees;
+};
 
 struct IndexRange {
 	int begin;
 	int endExclusive;
 };
 
+struct Position3 {
+	GLfloat x;
+	GLfloat y;
+	GLfloat z;
+};
+struct UV2 {
+	GLfloat u;
+	GLfloat v;
+};
+typedef struct Vertex {
+	Position3 pos;
+	UV2 uv;
+};
 
-struct FittedCurve {
-
+struct ShaderSource {
+	std::string vertex;
+	std::string geometry;
+	std::string fragment;
 };
 
 
@@ -30,6 +52,10 @@ typedef float Inches;
 typedef double Degrees;
 typedef double Radians;
 
+#define SHOW true;
+#define HIDE false;
+#define SUCCESS true;
+#define FAILURE false;
 #define MILLIMETERS_TO_INCHES 0.0393701;
 #define INCHES_TO_MILLIMETERS 25.4;
 
@@ -101,6 +127,13 @@ struct FloatVec3
 	float y;
 	float z;
 };
+struct FloatVec4
+{
+	float x;
+	float y;
+	float z;
+	float w;
+};
 struct FloatLine {
 	FloatVec2 a;
 	FloatVec2 b;
@@ -147,7 +180,7 @@ struct FillNode
 	std::vector<int> ids;
 	std::vector<FillNodeIndex> connections;
 };
-struct Blob
+struct ShapeDataRLE
 {
 	Rectangle rect;
 	RectangleSize size;
@@ -189,11 +222,39 @@ struct ShapeRLE {
 	Rectangle bounds;
 	std::vector<std::vector<Range>> rowRanges;
 };
-
+struct TrackedShapeRLE {
+	std::vector<ShapeRLE> shapePtrs;
+	StatsShapeRLE stats;
+};
+struct Stats {
+	int count = 0;
+	int nulls = 0;
+	float sum = 0.0;
+	float min = 0.0;
+	float max = 0.0;
+	float range = 0.0;
+	float median = 0.0;
+	float mean = 0.0;
+	float sd = 0.0;
+	float cv = 0.0;
+	float q1 = 0.0;
+	float q3 = 0.0;
+	float iqr = 0.0;
+	float skewness = 0.0;
+	// float kurtosis = 0.0;
+	// outliers for future consideration
+};
+struct StatsShapeRLE {
+	Float32SlopeInterceptRotation areaCenter;
+	Stats velocity;
+	Stats area;
+	Stats width;
+	Stats height;
+};
 
 struct BlobFrame
 {
-	std::vector<Blob> blobs;
+	std::vector<ShapeDataRLE> blobs;
 	std::vector<FillNodeIndex> indices;
 	std::vector<std::vector<FillNode>> nodes;
 };
@@ -202,7 +263,7 @@ struct BlobFrame
 
 struct BlobState
 {
-	std::vector<std::vector<Blob>> butt;
+	std::vector<std::vector<ShapeDataRLE>> butt;
 };
 
 
@@ -211,10 +272,6 @@ struct Chain
 
 };
 struct Trace
-{
-
-};
-struct Vertex
 {
 
 };

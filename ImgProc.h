@@ -189,7 +189,7 @@ inline bool IsPerimeter(int* left, int* center, int* right)
 
 inline void ColorBlobsThresholded(cv::Mat* out, BlobFrame& frame, const int areaThreshold)
 {
-	for (Blob& blob : frame.blobs)
+	for (ShapeDataRLE& blob : frame.blobs)
 	{
 		if (blob.area >= areaThreshold)
 		{
@@ -207,9 +207,9 @@ inline void ColorBlobsThresholded(cv::Mat* out, BlobFrame& frame, const int area
 inline void ConnectColorFrameToFrame(cv::Mat* out, BlobFrame& frame, BlobFrame& lastFrame, int distThreshold, int areaThreshold)
 {
 
-	std::vector<Blob> lastBlobs = lastFrame.blobs;
+	std::vector<ShapeDataRLE> lastBlobs = lastFrame.blobs;
 
-	for (Blob& blob : frame.blobs)
+	for (ShapeDataRLE& blob : frame.blobs)
 	{
 		if (blob.area >= areaThreshold)
 		{
@@ -217,7 +217,7 @@ inline void ConnectColorFrameToFrame(cv::Mat* out, BlobFrame& frame, BlobFrame& 
 
 			for (int k = 0; k < lastBlobs.size(); k++)
 			{
-				Blob prev = lastBlobs[k];
+				ShapeDataRLE prev = lastBlobs[k];
 
 				float xDist = blob.centerOfMass.x - prev.centerOfMass.x;
 				float yDist = blob.centerOfMass.y - prev.centerOfMass.y;
@@ -334,6 +334,166 @@ inline float QuadScore3D(float max, FloatVec3 a, FloatVec3 xIntercept, FloatVec3
 	return max * NormalizedCosBell(g * (x + y + z));
 }
 
+Stats StatsFor(std::vector<float> values) {
+	
+	Stats out;
+
+	out.count = values.size();
+	out.min = std::numeric_limits<float>::max();
+	out.max = std::numeric_limits<float>::min();
+	out.median = values[values.size() / 2];
+
+	for (float val : values) {
+		out.sum += val;
+		if (val < out.min) {
+			out.min = val;
+		}
+		if (val > out.max) {
+			out.max = val;
+		}
+	}
+
+	out.range = abs(out.max - out.min);
+	out.mean = out.sum / out.count;
+
+	float sumDeviationSquares = 0.0;
+	for (float val : values) {
+		sumDeviationSquares += pow(val - out.mean, 2);
+	}
+	out.sd = sumDeviationSquares / out.count;
+	out.cv = out.sd / out.mean;
+
+	std::sort(values.begin(), values.end());
+	int endQ1 = (values.size() / 2) - 1;
+	int sumQ1 = 0.0;
+	int countQ1 = 0;
+	for (int i = 0; i < endQ1; i++) {
+		countQ1++;
+		sumQ1 += values[i];
+	}
+	out.q1 = sumQ1 / countQ1;
+
+	int startQ3 = values.size() % 2 ? values.size() / 2 : (values.size() / 2) + 1;
+	int sumQ3 = 0.0;
+	int countQ3 = 0;
+	for (int i = startQ3; i < values.size(); i++) {
+		countQ3++;
+		sumQ3 += values[i];
+	}
+	out.q3 = sumQ3 / countQ3;
+	
+	out.iqr = out.q3 - out.q1;
+	out.skewness = (out.mean - out.median) / out.sd;
+}
+
+Stats StatsFor(std::vector<int> values) {
+
+	Stats out;
+
+	out.count = values.size();
+	out.min = std::numeric_limits<float>::max();
+	out.max = std::numeric_limits<float>::min();
+	out.median = values[values.size() / 2];
+
+	for (int val : values) {
+		out.sum += val;
+		if (val < out.min) {
+			out.min = val;
+		}
+		if (val > out.max) {
+			out.max = val;
+		}
+	}
+
+	out.range = abs(out.max - out.min);
+	out.mean = out.sum / out.count;
+
+	float sumDeviationSquares = 0.0;
+	for (int val : values) {
+		sumDeviationSquares += pow(val - out.mean, 2);
+	}
+	out.sd = sumDeviationSquares / out.count;
+	out.cv = out.sd / out.mean;
+
+	std::sort(values.begin(), values.end());
+	int endQ1 = (values.size() / 2) - 1;
+	int sumQ1 = 0.0;
+	int countQ1 = 0;
+	for (int i = 0; i < endQ1; i++) {
+		countQ1++;
+		sumQ1 += values[i];
+	}
+	out.q1 = sumQ1 / countQ1;
+
+	int startQ3 = values.size() % 2 ? values.size() / 2 : (values.size() / 2) + 1;
+	int sumQ3 = 0.0;
+	int countQ3 = 0;
+	for (int i = startQ3; i < values.size(); i++) {
+		countQ3++;
+		sumQ3 += values[i];
+	}
+	out.q3 = sumQ3 / countQ3;
+
+	out.iqr = out.q3 - out.q1;
+	out.skewness = (out.mean - out.median) / out.sd;
+}
+
+inline void Track2D(cv::Mat* imgOut, std::vector<TrackedShapeRLE>* tracking, std::vector<std::vector<ShapeRLE>> previous, ShapeRLE current, float timeDelta) {
+
+	// for each shape currently tracked
+	for (TrackedShapeRLE tracked : *tracking) {
+
+		// calculate future
+		// fit line with linear regression
+		StatsShapeRLE
+
+
+	}
+
+	// in    ->    previously tracked, past frames, current frame, timeDeltas, descriminators like minTrackedTime
+
+	/* thonk 1
+	// calculate futures of previous with successful tracking of frame count minTrackedTime
+	
+
+	// match current to calculated future
+
+
+	// initialize tracking on leftovers 
+
+
+	// 
+	*/
+
+	/* thonk 2
+	// for each previously tracked blob, look for match in current frame -> possible hash insertie boi 
+	//																		thonk reducer for blobie 
+	//																		boi searchie thonkz
+
+	// for each remaining tracked blob that wasnt tracked into the current frame -> use alternative match finding method
+
+	// try simple tracking with some discrimination for acceptance 
+
+	// for remaining -> try overlay blobie thonk matchinator boiz (potentially periodic differing from main stuffs)
+	
+	*/
+
+	
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 // float deltaTime, int areaCheckThreshold, float distScale, float posMod, float areaMod, float rectMod, float rectRatioMod, float postModPAR, float discard, float accept
 inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, float _dt, TrackingSettings _tracking)
@@ -345,8 +505,8 @@ inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, fl
 		float n;
 	};
 
-	std::vector<bool>								initialized = std::vector<bool>(_now.blobs.size(), false);
-	std::vector<std::vector<ScoreIdx>>				scores = std::vector<std::vector<ScoreIdx>>(_now.blobs.size(), std::vector < ScoreIdx >());
+	std::vector<bool> initialized = std::vector<bool>(_now.blobs.size(), false);
+	std::vector<std::vector<ScoreIdx>> scores = std::vector<std::vector<ScoreIdx>>(_now.blobs.size(), std::vector < ScoreIdx >());
 	std::vector<float> velocities = std::vector<float>(_now.blobs.size(), 0.0);
 	std::vector<FloatVec2> moves = std::vector<FloatVec2>(_now.blobs.size(), FloatVec2{ 0.0 , 0.0 });
 	std::vector<float> variance = std::vector<float>(_now.blobs.size(), 0.0);
@@ -354,13 +514,13 @@ inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, fl
 	// scoring connections i'th and j'th
 	for (int i = 0; i < _now.blobs.size(); i++)
 	{
-		Blob& cur = _now.blobs[i];
+		ShapeDataRLE& cur = _now.blobs[i];
 		//  per blob  ->  compare against previous blobs
 		if (cur.area >= _tracking.areaMinSize)
 		{
 			for (int j = 0; j < _last.blobs.size(); j++)
 			{
-				Blob& old = _last.blobs[j];
+				ShapeDataRLE& old = _last.blobs[j];
 
 				if (old.area >= _tracking.areaMinSize)
 				{
@@ -377,8 +537,8 @@ inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, fl
 					float areaWeight = 10.0;
 					float rectWeight = 10.0;
 
-					float wMod = 1.0; // wRatio* aSize.width + 1.0; // fatness fuckers
-					float hMod = 1.0; // hRatio* aSize.height + 1.0; // fatness fuckers brudder
+					float wMod = 1.0; // wRatio* aSize.width + 1.0;
+					float hMod = 1.0; // hRatio* aSize.height + 1.0; 
 
 					float posScore = QuadScore2D(posWeight, centerA, centerB, FloatVec2{ wMod , hMod }, _tracking.distMod);
 					float areaScore = QuadScore1D(areaWeight, cur.area, old.area, _tracking.areaMod);
@@ -436,7 +596,7 @@ inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, fl
 			}
 			if (j != -1)
 			{
-				Blob& blob = _now.blobs[i];
+				ShapeDataRLE& blob = _now.blobs[i];
 				blob.color = _last.blobs[j].color;
 
 				if (blob.render)
@@ -476,10 +636,10 @@ inline void ConnectBlobsTemporal(cv::Mat* out, std::deque<BlobFrame>& in, int di
 		BlobFrame& past = in[i];
 
 		// implement buffer for post processing - for now jsut do the dumb shit n use first found for testing
-		for (Blob& p : past.blobs)
+		for (ShapeDataRLE& p : past.blobs)
 		{
 			ColorRGBi& color = p.color;
-			for (Blob& n : now.blobs)
+			for (ShapeDataRLE& n : now.blobs)
 			{
 				float xDist = n.centerOfMass.x - p.centerOfMass.x;
 				float yDist = n.centerOfMass.y - p.centerOfMass.y;
@@ -775,7 +935,7 @@ inline std::vector<ShapeRLE> ExtractShapesRLE(cv::Mat* in) {
 	std::vector<FillNodeIndex> open;
 	for (int s = 0; s < frame.indices.size(); s++)
 	{
-		Blob blob;
+		ShapeDataRLE blob;
 		open.push_back(frame.indices[s]);
 
 		while (open.size())
@@ -842,7 +1002,7 @@ inline std::vector<ShapeRLE> ExtractShapesRLE(cv::Mat* in) {
 
 	std::vector<ShapeRLE> shapes = std::vector<ShapeRLE>(frame.blobs.size(), ShapeRLE{});
 
-	for (Blob b : frame.blobs) {
+	for (ShapeDataRLE b : frame.blobs) {
 		
 		ShapeRLE shape = ShapeRLE{};
 		shape.rowRanges = std::vector<std::vector<Range>>(b.size.height);
@@ -913,7 +1073,7 @@ inline void GetBlobs(cv::Mat* in, cv::Mat* out, int max, int minSize, BlobFrame&
 	// dafuq
 	std::vector<FillNodeIndex> open;
 	for (int s = 0; s < frame.indices.size(); s++){
-		Blob blob;
+		ShapeDataRLE blob;
 		open.push_back(frame.indices[s]);
 		while (open.size()){
 			FillNodeIndex index = open.back();
@@ -1258,11 +1418,11 @@ void SetSpanBufferPixels(cv::Mat* _in, cv::Mat* _out, int _threshold, int _max)
 		}
 	}
 
-	std::vector<Blob> blobs;
+	std::vector<ShapeDataRLE> blobs;
 	std::vector<FillNodeIndex> open;
 	for (int s = 0; s < nodesIndexes.size(); s++)
 	{
-		Blob blob;
+		ShapeDataRLE blob;
 		open.push_back(nodesIndexes[s]);
 
 		while (open.size())

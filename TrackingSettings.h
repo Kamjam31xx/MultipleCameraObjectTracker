@@ -2,6 +2,7 @@
 
 struct TrackingSettings {
 	float areaMinSize = 150.0;
+	float areaMaxSize = 600.0;
 	float distScale = 1.0;
 	float distMod = 0.1;
 	float areaMod = 0.05;

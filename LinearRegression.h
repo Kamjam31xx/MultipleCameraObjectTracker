@@ -6,6 +6,101 @@
 #include "ImgProcTypes.h"
 #include "Values.h"
 
+Float32SlopeInterceptRotation LinearRegressionR2D1f(std::vector<FloatVec2> points) {
+
+	float rotationStepSize = 17.3;
+	int rotationStep = 1;
+	float thresh = 0.00000001;
+
+	while (true) {
+
+		float xSum = 0;
+		float ySum = 0;
+		float xySum = 0;
+		float x2Sum = 0;
+
+		float rotation = rotationStep * rotationStepSize * TO_RADIANS;
+
+		for (int k = 0; k < points.size(); k++) {
+			float x = (points[k].x * cos(rotation)) - (points[k].y * sin(rotation));
+			float y = (points[k].y * cos(rotation)) + (points[k].x * sin(rotation));
+			xSum += x;
+			ySum += y;
+			xySum += x * y;
+			x2Sum += x * x;
+		}
+
+		float numerator = (points.size() * xySum) - (xSum * ySum);
+		float denominator = (points.size() * x2Sum) - (xSum * xSum);
+
+		bool denominatorTooSmall = denominator <= thresh && denominator >= -thresh;
+		bool numeratorTooSmall = numerator <= thresh && numerator >= -thresh;
+		if (denominatorTooSmall || numeratorTooSmall) {
+			// has failed -> change rotation and reset
+			rotationStep++;
+			continue;
+		}
+
+		float slope = numerator / denominator;
+		bool slopeTooSmall = slope <= thresh && slope >= -thresh;
+		if (slopeTooSmall) {
+			// has failed -> change rotation and reset
+			rotationStep++;
+			continue;
+		}
+
+		float intercept = (ySum - (slope * xSum)) / points.size();
+		return Float32SlopeInterceptRotation{ slope, intercept, rotation * TO_DEGREES };
+	}
+}
+ShapeRLE LinearRegressionR2D1f(std::vector<ShapeRLE*> shapes) {
+
+	float rotationStepSize = 17.3;
+	int rotationStep = 1;
+	float thresh = 0.00000001;
+
+	while (true) {
+
+		float xSum = 0;
+		float ySum = 0;
+		float xySum = 0;
+		float x2Sum = 0;
+
+		float rotation = rotationStep * rotationStepSize * TO_RADIANS;
+
+		for (int k = 0; k < points.size(); k++) {
+			float x = (points[k].x * cos(rotation)) - (points[k].y * sin(rotation));
+			float y = (points[k].y * cos(rotation)) + (points[k].x * sin(rotation));
+			xSum += x;
+			ySum += y;
+			xySum += x * y;
+			x2Sum += x * x;
+		}
+
+		float numerator = (points.size() * xySum) - (xSum * ySum);
+		float denominator = (points.size() * x2Sum) - (xSum * xSum);
+
+		bool denominatorTooSmall = denominator <= thresh && denominator >= -thresh;
+		bool numeratorTooSmall = numerator <= thresh && numerator >= -thresh;
+		if (denominatorTooSmall || numeratorTooSmall) {
+			// has failed -> change rotation and reset
+			rotationStep++;
+			continue;
+		}
+
+		float slope = numerator / denominator;
+		bool slopeTooSmall = slope <= thresh && slope >= -thresh;
+		if (slopeTooSmall) {
+			// has failed -> change rotation and reset
+			rotationStep++;
+			continue;
+		}
+
+		float intercept = (ySum - (slope * xSum)) / points.size();
+		return Float32SlopeInterceptRotation{ slope, intercept, rotation * TO_DEGREES };
+	}
+}
+
 // linear regression where the points are rotated to fit the line to them
 Float64SlopeInterceptRotation LinearRegressionR2D1(std::vector<FloatVec2> points) {
 

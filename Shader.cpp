@@ -6,23 +6,20 @@ Shader::Shader()
 	shaderID = 0;
 }
 
-void Shader::CreateFromString(const char* vertexCode, const char* fragmentCode)
-{
-	CompileShader(vertexCode, fragmentCode, nullptr);
+void Shader::CreateFromSource(ShaderSource source) {
+	CreateFromStrings(source.vertex, source.geometry, source.fragment);
+}
+void Shader::CreateFromStrings(std::string vertexCodeStr, std::string geometryCodeStr, std::string fragmentCodeStr) {
+	const char* vertexCode = vertexCodeStr == "" ? nullptr : vertexCodeStr.c_str();
+	const char* geometryCode = geometryCodeStr == "" ? nullptr : geometryCodeStr.c_str();
+	const char* fragmentCode = fragmentCodeStr == "" ? nullptr : fragmentCodeStr.c_str();
+	CompileShader(vertexCode, geometryCode, fragmentCode);
 }
 void Shader::CreateFromFiles(const char* vertexLocation, const char* geometryLocation, const char* fragmentLocation)
 {
-	std::string vertexString;
-	std::string fragmentString;
-	std::string geometryString;
-
-	vertexString = ReadFile(vertexLocation);
-	fragmentString = ReadFile(fragmentLocation);
-	geometryString = ReadFile(geometryLocation);
-
-	const char* vertexCode = vertexString.c_str();
-	const char* geometryCode = geometryString.c_str();
-	const char* fragmentCode = fragmentString.c_str();
+	const char* vertexCode = vertexLocation == nullptr ? nullptr : ReadFile(vertexLocation).c_str();
+	const char* geometryCode = geometryLocation == nullptr ? nullptr : ReadFile(geometryLocation).c_str();
+	const char* fragmentCode = fragmentLocation == nullptr ? nullptr : ReadFile(fragmentLocation).c_str();
 	CompileShader(vertexCode, geometryCode, fragmentCode);
 }
 std::string Shader::ReadFile(const char* fileLocation)
@@ -87,14 +84,17 @@ void Shader::CompileProgram()
 		printf("Error linking program: '%s' \n", eLog);
 		return;
 	}
-	uniformBrightness = glGetUniformLocation(shaderID, "brightness");
+	uniformMVP = glGetUniformLocation(shaderID, "MVP");
 }
 
-void Shader::SetBrightness(GLfloat brightness) {
-	glUniform1f(uniformBrightness, brightness);
+void Shader::SetMVP(mat4x4* MVP) {
+	glUniformMatrix4fv(uniformMVP, 1, GL_FALSE, (const GLfloat*)MVP);
 }
-GLuint Shader::GetBrightnessLocation() {
-	return uniformBrightness;
+GLuint Shader::GetShaderID() {
+	return shaderID;
+}
+GLuint Shader::GetLocationMVP() {
+	return uniformMVP;
 }
 
 void Shader::UseShader()
