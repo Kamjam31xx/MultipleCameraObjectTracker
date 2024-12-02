@@ -45,6 +45,7 @@
     <ClInclude Include="CaptureSettings.h" />
     <ClInclude Include="GaussNewton.h" />
     <ClInclude Include="CallbacksGLFW.h" />
+    <ClInclude Include="ImgProcHelpers.h" />
     <ClInclude Include="linmath.h" />
     <ClInclude Include="LogSettings.h" />
     <ClInclude Include="MultiTracker2D.h" />

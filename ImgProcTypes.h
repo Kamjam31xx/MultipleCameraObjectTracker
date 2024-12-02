@@ -1,5 +1,13 @@
 #pragma once
 
+#include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_opengl3.h"
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+#include "opencv2/opencv.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+
 #include <vector>
 #include <string>
 #include <array>
@@ -222,10 +230,6 @@ struct ShapeRLE {
 	Rectangle bounds;
 	std::vector<std::vector<Range>> rowRanges;
 };
-struct TrackedShapeRLE {
-	std::vector<ShapeRLE> shapePtrs;
-	StatsShapeRLE stats;
-};
 struct Stats {
 	int count = 0;
 	int nulls = 0;
@@ -250,6 +254,14 @@ struct StatsShapeRLE {
 	Stats area;
 	Stats width;
 	Stats height;
+};
+struct TrackedShapeRLE {
+	std::vector<ShapeRLE*> shapePtrs;
+	StatsShapeRLE stats;
+};
+struct TrackingParameters {
+	float velocityMaxDifference = 10.0f;
+	float directionMaxDifference = 3.14159 / sqrt(2.0);
 };
 
 struct BlobFrame

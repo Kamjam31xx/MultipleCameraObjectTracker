@@ -18,437 +18,123 @@
 #include <cmath>
 #include <utility>
 #include <algorithm>
+#include <ranges>
 
 #include "ImgProcTypes.h"
 #include "DeltaTime.h"
 #include "FrameRate.h"
 #include "Utils.h"
 #include "AppSettings.h"
+#include "LinearRegression.h"
+#include "ImgProcHelpers.h"
 
-Poly2 ToPoly2(PolyN in) {
-	return Poly2{ in.a, in.b };
-}
-Poly3 ToPoly3(PolyN in) {
-	return Poly3{ in.a, in.b , in.c };
-}
-Poly4 ToPoly4(PolyN in) {
-	return Poly4{ in.a, in.b, in.c, in.d };
-}
-Poly5 ToPoly5(PolyN in) {
-	return Poly5{ in.a, in.b, in.c, in.d, in.e };
-}
-inline bool ContainsCoord(std::vector<PixelCoord>& pixels, PixelCoord val) {
-	for (PixelCoord px : pixels) {
-		if (px.x == val.x && px.y == val.y) {
-			return true;
+
+
+inline void Track2D(
+	cv::Mat* imgOut, 
+	std::vector<float> previousTimeDeltas, 
+	std::vector<TrackedShapeRLE>* tracking, 
+	std::vector<std::vector<ShapeRLE>> previous, 
+	std::vector<ShapeRLE> current, 
+	float timeDelta, 
+	TrackingParameters params) {
+
+	// keep track of all unmatched shapes, removing them as matched and tracking into current frame
+	std::vector<ShapeRLE*> currentOpenPtrs = std::vector<ShapeRLE*>();
+	for (ShapeRLE shape : current) {
+		currentOpenPtrs.push_back(&shape);
+	}
+
+	// for each previously tracked shape
+	for (int i = 0; i < (*tracking).size(); i++) {
+
+		TrackedShapeRLE tracked = (*tracking)[i];
+		// pack values from each frame the shape was tracked in
+		std::vector<int> areas = std::vector<int>();
+		std::vector<FloatVec2> areaCenters = std::vector<FloatVec2>();
+		std::vector<int> widths = std::vector<int>();
+		std::vector<int> heights = std::vector<int>();
+		std::vector<Rectangle> bounds = std::vector<Rectangle>();
+		for (ShapeRLE* shapePtr : tracked.shapePtrs) {
+			areas.push_back((*shapePtr).area);
+			areaCenters.push_back((*shapePtr).areaCenter);
+			widths.push_back((*shapePtr).width);
+			heights.push_back((*shapePtr).height);
+			bounds.push_back((*shapePtr).bounds);
+
 		}
-	}
-	return false;
-}
-inline bool PixelInBounds(PixelCoord* p, int width, int height)
-{
-	if ((p->x >= 0) && (p->x < width) && (p->y >= 0) && (p->y < height))
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
-inline bool PixelInBounds(PixelCoord p, int width, int height)
-{
-	if ((p.x >= 0) && (p.x < width) && (p.y >= 0) && (p.y < height))
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
-inline bool Walkable(cv::Mat& mat, PixelCoord in, int threshold)
-{
-	return PixelInBounds(in, mat.rows, mat.cols) ? bool(mat.at<cv::Vec3b>(in.x, in.y)[0] > threshold) : false;
-}
-inline bool Blocked(cv::Mat& mat, PixelCoord in, int threshold)
-{
-	return !PixelInBounds(in, mat.rows, mat.cols) ? bool(mat.at<cv::Vec3b>(in.x, in.y)[0] > threshold) : false;
-}
-inline bool IsSame(PixelCoord a, PixelCoord b) {
-	return a.x == b.x && a.y == b.y;
-}
-inline bool IsSame(IntVec2 a, IntVec2 b) {
-	return a.x == b.x && a.y == b.y;
-}
-inline IntLine SwapAB(IntLine input) {
-	return IntLine{ input.b, input.a };
-}
-inline PixelCoord Add(PixelCoord a, PixelCoord b) {
-	return PixelCoord{ a.x + b.x, a.y + b.y };
-}
-bool PointIsInCornerPinRect(CornerPinRect* bounds, int x, int y)
-{
-	if (x > bounds->x && x < bounds->x + bounds->w && y > bounds->y && y < bounds->y + bounds->h)
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
 
-void GenerateLightMasksFrame(cv::Mat* color, cv::Mat* mask, cv::Mat* output)
-{
-	cv::Mat colorCpy;
-	cv::Mat maskCpy;
-
-	color->convertTo(colorCpy, CV_8UC3);
-	mask->convertTo(maskCpy, CV_8UC3);
-
-	cv::multiply(colorCpy, maskCpy, *output, 1.0 / 255.0);
-}
-inline void ColorPixel(cv::Mat* img, PixelCoord px, int red, int green, int blue)
-{
-	(*img).at<cv::Vec3b>(px.x, px.y)[0] = blue;
-	(*img).at<cv::Vec3b>(px.x, px.y)[1] = green;
-	(*img).at<cv::Vec3b>(px.x, px.y)[2] = red;
-}
-inline void ColorPixel(cv::Mat* img, PixelCoord px, ColorRGBi c)
-{
-	(*img).at<cv::Vec3b>(px.x, px.y)[0] = c.blue;
-	(*img).at<cv::Vec3b>(px.x, px.y)[1] = c.green;
-	(*img).at<cv::Vec3b>(px.x, px.y)[2] = c.red;
-}
-inline void AddColorPixel(cv::Mat* img, PixelCoord px, ColorRGBi c)
-{
-	(*img).at<cv::Vec3b>(px.x, px.y)[0] += c.blue;
-	(*img).at<cv::Vec3b>(px.x, px.y)[1] += c.green;
-	(*img).at<cv::Vec3b>(px.x, px.y)[2] += c.red;
-}
-inline void MulColorPixel(cv::Mat* img, PixelCoord px, ColorRGBi c)
-{
-	(*img).at<cv::Vec3b>(px.x, px.y)[0] *= c.blue;
-	(*img).at<cv::Vec3b>(px.x, px.y)[1] *= c.green;
-	(*img).at<cv::Vec3b>(px.x, px.y)[2] *= c.red;
-}
-
-bool aInB(std::vector<PixelCoord>* a, PixelCoord xIntercept)
-{
-	for (PixelCoord& px : *a)
-	{
-		if ((px.x == xIntercept.x) && (px.y == xIntercept.y))
-		{
-			return true;
+		// calc stats for variables
+		Stats areaStats = StatsForInts(areas);
+		Stats widthStats = StatsForInts(widths);
+		Stats heightStats = StatsForInts(heights);
+		
+		// fit line for direction to center of area
+		Float32SlopeInterceptRotation areaCenterLine = LinearRegressionR2D1f(areaCenters);
+		std::vector<float> positionDeviations = std::vector<float>();
+		for (ShapeRLE* shapePtr : tracked.shapePtrs) {
+			FloatVec2 relativePosition = (*shapePtr).areaCenter;
+			float deviation = DistancePointLine(relativePosition, areaCenterLine);
 		}
-	}
-	return false;
-}
+		Stats positionStats = StatsForFloats(positionDeviations);
 
-inline float Distance(FloatVec2 a, FloatVec2 b) {
-	float term1 = powf(a.x - b.x, 2);
-	float term2 = powf(a.y - b.y, 2);
-	return std::sqrtf(term1 + term2);
-}
+		// calculate previous velocities and calc stats for velocity of the shape as it has been tracked
+		std::vector<float> velocities = std::vector<float>(); 
+		for (int j = 0; j + 1 < tracked.shapePtrs.size(); j++) {
+			int x0 = (*tracked.shapePtrs[j]).areaCenter.x;
+			int y0 = (*tracked.shapePtrs[j]).areaCenter.y;
+			int x1 = (*tracked.shapePtrs[j + 1]).areaCenter.x;
+			int y1 = (*tracked.shapePtrs[j + 1]).areaCenter.y;
+			velocities.push_back(Velocity2D(x0, y0, x1, y1, previousTimeDeltas[j + 1]));
 
-inline int Squared(int a) {
-	return a * a;
-}
-
-inline ColorRGBi RandomColor()
-{
-
-	return ColorRGBi{ rand() % 256 , rand() % 256 , rand() % 256 };
-
-}
-
-inline bool Traverseable(cv::Mat* mat, PixelCoord* in, int* threshold)
-{
-	return PixelInBounds(in, mat->rows, mat->cols) ? bool(mat->at<cv::Vec3b>(in->x, in->y)[0] > * threshold) : false;
-}
-inline bool Traverseable(cv::Mat* mat, PixelCoord in, int threshold)
-{
-	return PixelInBounds(in, mat->rows, mat->cols) ? bool(mat->at<cv::Vec3b>(in.x, in.y)[0] > threshold) : false;
-}
-
-inline bool NumInRangeMinMax(int n, int min, int max)
-{
-	return (min <= n) && (max >= n);
-}
-
-
-inline bool RangesIntersect(PerimeterPoint a0, PerimeterPoint a1, PerimeterPoint b0, PerimeterPoint b1)
-{
-	return NumInRangeMinMax(a0, b0, b1) || NumInRangeMinMax(a1, b0, b1) || NumInRangeMinMax(b0, a0, a1) || NumInRangeMinMax(b1, a0, a1);
-}
-inline bool IsPerimeter(int* left, int* center, int* right)
-{
-	return *center && ((*left + *right) == 1);
-}
-
-inline void ColorBlobsThresholded(cv::Mat* out, BlobFrame& frame, const int areaThreshold)
-{
-	for (ShapeDataRLE& blob : frame.blobs)
-	{
-		if (blob.area >= areaThreshold)
-		{
-			for (FillNodeIndex& iNode : blob.indices)
-			{
-				FillNode& node = frame.nodes[iNode.y][iNode.i];
-				for (int x = node.x1; x < node.x2 + 1; x++)
-				{
-					ColorPixel(out, PixelCoord{ x , node.index.y }, blob.color.red, blob.color.green, blob.color.blue);
-				}
-			}
 		}
-	}
-}
-inline void ConnectColorFrameToFrame(cv::Mat* out, BlobFrame& frame, BlobFrame& lastFrame, int distThreshold, int areaThreshold)
-{
+		Stats velocityStats = StatsForFloats(velocities);
 
-	std::vector<ShapeDataRLE> lastBlobs = lastFrame.blobs;
 
-	for (ShapeDataRLE& blob : frame.blobs)
-	{
-		if (blob.area >= areaThreshold)
-		{
-			ColorRGBi color = ColorRGBi{ 0,0,0 };
+		// for each shape in the current frame compare it to this shapes tracking history
+		FloatVec2 direction = DirectionUnitVector(areaCenterLine);
+		int x0 = (*tracked.shapePtrs[tracked.shapePtrs.size() - 1]).areaCenter.x;
+		int y0 = (*tracked.shapePtrs[tracked.shapePtrs.size() - 1]).areaCenter.y;
+		FloatVec2 futurePosition = { x0 + (direction.x * velocityStats.mean), y0 + (direction.y * velocityStats.mean) };
+		for (int j = 0; j < currentOpenPtrs.size(); j++) {
 
-			for (int k = 0; k < lastBlobs.size(); k++)
-			{
-				ShapeDataRLE prev = lastBlobs[k];
+			ShapeRLE* open = currentOpenPtrs[j];
 
-				float xDist = blob.centerOfMass.x - prev.centerOfMass.x;
-				float yDist = blob.centerOfMass.y - prev.centerOfMass.y;
-				float magnitude = std::sqrt((xDist * xDist) + (yDist * yDist));
+			int x1 = (*open).areaCenter.x;
+			int y1 = (*open).areaCenter.y;
+			float velocity = Velocity2D(x0, y0, x1, y1, timeDelta);
 
-				float areaDifference = (prev.area - blob.area) * (prev.area - blob.area) / (prev.area - blob.area);
+			float positionDeviation = PointDistance(futurePosition, FloatVec2{ (float)x1, (float)y1 });
+			float areaDeviation = abs(areaStats.mean - (*open).area);
+			float widthDeviation = abs(widthStats.mean - (*open).width);
+			float heightDeviation = abs(heightStats.mean - (*open).height);
+			float velocityDeviation = abs(velocityStats.mean - velocity);
 
-				bool distCheck = magnitude < distThreshold;
-				bool areaCheck = areaDifference < areaThreshold;
+			float positionWeight = 1.0;
+			float areaWeight = 0.6;
+			float widthWeight = 0.25;
+			float heightWeight = 0.25;
+			float velocityWeight = 1.0;
 
-				if (areaCheck && distCheck)
-				{
-					color = prev.color;
-					for (FillNodeIndex& i : blob.indices)
-					{
-						FillNode& node = frame.nodes[i.y][i.i];
-						for (int x = node.x1; x < node.x2 + 1; x++)
-						{
-							ColorPixel(out, PixelCoord{ x , node.index.y }, color.red, color.green, color.blue);
-						}
-					}
-					break;
-				}
+			float positionScore = positionWeight * (positionDeviation - positionStats.sd);
+			float areaScore = areaWeight * (areaDeviation - areaStats.sd);
+			float widthScore = widthWeight * (widthDeviation - widthStats.sd);
+			float heightScore = heightWeight * (heightDeviation - heightStats.sd);
+			float velocityScore = velocityWeight * (velocityDeviation - velocityStats.sd);
+
+			float score = positionScore + areaScore + widthScore + heightScore + velocityScore;
+
+			float scoreThreshold = 1.0;
+			if (score < scoreThreshold) {
+				// hurray you found it
+				(*tracking)[i].shapePtrs.push_back(currentOpenPtrs[j]);
+				currentOpenPtrs.erase(currentOpenPtrs.begin() + j);
 
 			}
 		}
 	}
-}
-inline float MinRatio(int a, int xIntercept)
-{
-	return (a > xIntercept) ? (a / xIntercept) : (xIntercept / a);
-}
-/*inline float Distance(FloatVec2 a, FloatVec2 xIntercept)
-{
-	float x = a.x - xIntercept.x;
-	float y = a.y - xIntercept.y;
-
-	return std::sqrt((x * x) + (y * y));
-}*/
-inline float Distance(int aX, int aY, int bX, int bY)
-{
-	float x = abs(aX) - abs(bX);
-	float y = abs(aY) - abs(bY);
-	float dist = std::sqrt((x * x) + (y * y));
-
-	return dist;
-}
-inline float ManhattanNonNegative(int aX, int aY, int bX, int bY)
-{
-	return abs(aX - bX) + abs(bX - bY);
-}
-inline float NormalizedCosBell(float n)
-{
-	float pi = 3.14159265359;
-	return 1 - cos(pi / (n + 2));
-}
-inline float QuadraticBell(float n)
-{
-	// maybe doesnt branch -> might not be as good of an approximation of normal dist
-	return 1 / (1 + (n * n));
-}
-inline float Score1D(float max, float a, float xIntercept, float g)
-{
-	float x = a - xIntercept;
-	x *= x * g;
-
-	return max * NormalizedCosBell(g * x);
-}
-inline float Score2D(float max, FloatVec2 a, FloatVec2 xIntercept, FloatVec2 w, float g)
-{
-	float x = a.x - xIntercept.x;
-	float y = a.y - xIntercept.y;
-	x *= x * w.x;
-	y *= y * w.y;
-
-	return max * NormalizedCosBell(g * (x + y));
-}
-inline float Score3D(float max, FloatVec3 a, FloatVec3 xIntercept, FloatVec3 w, float g)
-{
-	float x = a.x - xIntercept.x;
-	float y = a.y - xIntercept.y;
-	float z = a.z - xIntercept.z;
-	x *= x * w.x;
-	y *= y * w.y;
-	z *= z * w.z;
-
-	return max * NormalizedCosBell(g * (x + y + z));
-}
-inline float QuadScore1D(float max, float a, float xIntercept, float g)
-{
-	float x = a - xIntercept;
-	x *= x * g;
-
-	return max * NormalizedCosBell(g * x);
-}
-inline float QuadScore2D(float max, FloatVec2 a, FloatVec2 xIntercept, FloatVec2 w, float g)
-{
-	float x = a.x - xIntercept.x;
-	float y = a.y - xIntercept.y;
-	x *= x * w.x;
-	y *= y * w.y;
-
-	return max * NormalizedCosBell(g * (x + y));
-}
-inline float QuadScore3D(float max, FloatVec3 a, FloatVec3 xIntercept, FloatVec3 w, float g)
-{
-	float x = a.x - xIntercept.x;
-	float y = a.y - xIntercept.y;
-	float z = a.z - xIntercept.z;
-	x *= x * w.x;
-	y *= y * w.y;
-	z *= z * w.z;
-
-	return max * NormalizedCosBell(g * (x + y + z));
-}
-
-Stats StatsFor(std::vector<float> values) {
-	
-	Stats out;
-
-	out.count = values.size();
-	out.min = std::numeric_limits<float>::max();
-	out.max = std::numeric_limits<float>::min();
-	out.median = values[values.size() / 2];
-
-	for (float val : values) {
-		out.sum += val;
-		if (val < out.min) {
-			out.min = val;
-		}
-		if (val > out.max) {
-			out.max = val;
-		}
-	}
-
-	out.range = abs(out.max - out.min);
-	out.mean = out.sum / out.count;
-
-	float sumDeviationSquares = 0.0;
-	for (float val : values) {
-		sumDeviationSquares += pow(val - out.mean, 2);
-	}
-	out.sd = sumDeviationSquares / out.count;
-	out.cv = out.sd / out.mean;
-
-	std::sort(values.begin(), values.end());
-	int endQ1 = (values.size() / 2) - 1;
-	int sumQ1 = 0.0;
-	int countQ1 = 0;
-	for (int i = 0; i < endQ1; i++) {
-		countQ1++;
-		sumQ1 += values[i];
-	}
-	out.q1 = sumQ1 / countQ1;
-
-	int startQ3 = values.size() % 2 ? values.size() / 2 : (values.size() / 2) + 1;
-	int sumQ3 = 0.0;
-	int countQ3 = 0;
-	for (int i = startQ3; i < values.size(); i++) {
-		countQ3++;
-		sumQ3 += values[i];
-	}
-	out.q3 = sumQ3 / countQ3;
-	
-	out.iqr = out.q3 - out.q1;
-	out.skewness = (out.mean - out.median) / out.sd;
-}
-
-Stats StatsFor(std::vector<int> values) {
-
-	Stats out;
-
-	out.count = values.size();
-	out.min = std::numeric_limits<float>::max();
-	out.max = std::numeric_limits<float>::min();
-	out.median = values[values.size() / 2];
-
-	for (int val : values) {
-		out.sum += val;
-		if (val < out.min) {
-			out.min = val;
-		}
-		if (val > out.max) {
-			out.max = val;
-		}
-	}
-
-	out.range = abs(out.max - out.min);
-	out.mean = out.sum / out.count;
-
-	float sumDeviationSquares = 0.0;
-	for (int val : values) {
-		sumDeviationSquares += pow(val - out.mean, 2);
-	}
-	out.sd = sumDeviationSquares / out.count;
-	out.cv = out.sd / out.mean;
-
-	std::sort(values.begin(), values.end());
-	int endQ1 = (values.size() / 2) - 1;
-	int sumQ1 = 0.0;
-	int countQ1 = 0;
-	for (int i = 0; i < endQ1; i++) {
-		countQ1++;
-		sumQ1 += values[i];
-	}
-	out.q1 = sumQ1 / countQ1;
-
-	int startQ3 = values.size() % 2 ? values.size() / 2 : (values.size() / 2) + 1;
-	int sumQ3 = 0.0;
-	int countQ3 = 0;
-	for (int i = startQ3; i < values.size(); i++) {
-		countQ3++;
-		sumQ3 += values[i];
-	}
-	out.q3 = sumQ3 / countQ3;
-
-	out.iqr = out.q3 - out.q1;
-	out.skewness = (out.mean - out.median) / out.sd;
-}
-
-inline void Track2D(cv::Mat* imgOut, std::vector<TrackedShapeRLE>* tracking, std::vector<std::vector<ShapeRLE>> previous, ShapeRLE current, float timeDelta) {
-
-	// for each shape currently tracked
-	for (TrackedShapeRLE tracked : *tracking) {
-
-		// calculate future
-		// fit line with linear regression
-		StatsShapeRLE
 
 
-	}
 
 	// in    ->    previously tracked, past frames, current frame, timeDeltas, descriminators like minTrackedTime
 
