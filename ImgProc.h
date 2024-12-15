@@ -27,47 +27,57 @@
 #include "AppSettings.h"
 #include "LinearRegression.h"
 #include "ImgProcHelpers.h"
+#include "CircularBuffer.h"
 
 
 
-inline void Track2D(
-	cv::Mat* imgOut, 
-	std::vector<float> previousTimeDeltas, 
-	std::vector<TrackedShapeRLE>* tracking, 
-	std::vector<std::vector<ShapeRLE>> previous, 
-	std::vector<ShapeRLE> current, 
-	float timeDelta, 
-	TrackingParameters params) {
+inline std::vector<TrackedShapeRLE> TrackSegments(CircularBuffer<float>* previousTimeDeltas, std::vector<TrackedShapeRLE>* tracking, CircularBuffer<std::vector<ShapeRLE>>* previous, std::vector<ShapeRLE>* current, float timeDelta, TrackingParameters params) {
+
+	std::vector<TrackedShapeRLE> result = std::vector<TrackedShapeRLE>(0);
 
 	// keep track of all unmatched shapes, removing them as matched and tracking into current frame
-	std::vector<ShapeRLE*> currentOpenPtrs = std::vector<ShapeRLE*>();
-	for (ShapeRLE shape : current) {
-		currentOpenPtrs.push_back(&shape);
+	std::vector<ShapeRLE*> unmatched = std::vector<ShapeRLE*>(); // note : use vector copy constructor
+	for (ShapeRLE shape : (*current)) {
+		unmatched.push_back(&shape);
 	}
 
-	// for each previously tracked shape
+	// note : to-do -> remove indices from a list for the previous frame when found
+	//				-> change indexing method and stuffs + abstract stuff away
+	// 
+	// for each previously tracked shape find using simple statistics stuffs
+	/*std::vector<int> openTrackingIndices = std::vector<int>();
+	for (int i = 0; i < (*tracking).size(); i++) {
+		openTrackingIndices.push_back(i);
+	}
 	for (int i = 0; i < (*tracking).size(); i++) {
 
+
 		TrackedShapeRLE tracked = (*tracking)[i];
+
+		// if only tracked for 3
+		if (tracked.shapePtrs.size() < 4) {
+			continue;
+		}
+
 		// pack values from each frame the shape was tracked in
 		std::vector<int> areas = std::vector<int>();
 		std::vector<FloatVec2> areaCenters = std::vector<FloatVec2>();
 		std::vector<int> widths = std::vector<int>();
 		std::vector<int> heights = std::vector<int>();
-		std::vector<Rectangle> bounds = std::vector<Rectangle>();
+		std::vector<Rectangle> rect = std::vector<Rectangle>();
 		for (ShapeRLE* shapePtr : tracked.shapePtrs) {
 			areas.push_back((*shapePtr).area);
 			areaCenters.push_back((*shapePtr).areaCenter);
 			widths.push_back((*shapePtr).width);
 			heights.push_back((*shapePtr).height);
-			bounds.push_back((*shapePtr).bounds);
+			rect.push_back((*shapePtr).rect);
 
 		}
 
 		// calc stats for variables
-		Stats areaStats = StatsForInts(areas);
-		Stats widthStats = StatsForInts(widths);
-		Stats heightStats = StatsForInts(heights);
+		Stats areaStats = StatsFor(areas);
+		Stats widthStats = StatsFor(widths);
+		Stats heightStats = StatsFor(heights);
 		
 		// fit line for direction to center of area
 		Float32SlopeInterceptRotation areaCenterLine = LinearRegressionR2D1f(areaCenters);
@@ -76,7 +86,7 @@ inline void Track2D(
 			FloatVec2 relativePosition = (*shapePtr).areaCenter;
 			float deviation = DistancePointLine(relativePosition, areaCenterLine);
 		}
-		Stats positionStats = StatsForFloats(positionDeviations);
+		Stats positionStats = StatsFor(positionDeviations);
 
 		// calculate previous velocities and calc stats for velocity of the shape as it has been tracked
 		std::vector<float> velocities = std::vector<float>(); 
@@ -85,10 +95,10 @@ inline void Track2D(
 			int y0 = (*tracked.shapePtrs[j]).areaCenter.y;
 			int x1 = (*tracked.shapePtrs[j + 1]).areaCenter.x;
 			int y1 = (*tracked.shapePtrs[j + 1]).areaCenter.y;
-			velocities.push_back(Velocity2D(x0, y0, x1, y1, previousTimeDeltas[j + 1]));
+			velocities.push_back(Velocity2D(x0, y0, x1, y1, (*previousTimeDeltas)[j + 1]));
 
 		}
-		Stats velocityStats = StatsForFloats(velocities);
+		Stats velocityStats = StatsFor(velocities);
 
 
 		// for each shape in the current frame compare it to this shapes tracking history
@@ -96,9 +106,9 @@ inline void Track2D(
 		int x0 = (*tracked.shapePtrs[tracked.shapePtrs.size() - 1]).areaCenter.x;
 		int y0 = (*tracked.shapePtrs[tracked.shapePtrs.size() - 1]).areaCenter.y;
 		FloatVec2 futurePosition = { x0 + (direction.x * velocityStats.mean), y0 + (direction.y * velocityStats.mean) };
-		for (int j = 0; j < currentOpenPtrs.size(); j++) {
+		for (int j = 0; j < unmatched.size(); j++) {
 
-			ShapeRLE* open = currentOpenPtrs[j];
+			ShapeRLE* open = unmatched[j];
 
 			int x1 = (*open).areaCenter.x;
 			int y1 = (*open).areaCenter.y;
@@ -127,59 +137,140 @@ inline void Track2D(
 			float scoreThreshold = 1.0;
 			if (score < scoreThreshold) {
 				// hurray you found it
-				(*tracking)[i].shapePtrs.push_back(currentOpenPtrs[j]);
-				currentOpenPtrs.erase(currentOpenPtrs.begin() + j);
+				(*tracking)[i].shapePtrs.push_back(unmatched[j]);
+				unmatched.erase(unmatched.begin() + j);
+				openTrackingIndices.erase(openTrackingIndices.begin() + i); // ? bad thonkz?
+				break;
 
+			}
+		}
+	}*/
+
+	// for each remaining shape that was previously tracked and not matched to this frame
+	std::vector<TrackedShapeRLE> newTracks = std::vector<TrackedShapeRLE>();
+	int searchDepth = 1;
+	for (int i = 0; i < searchDepth; i++) {
+
+		std::vector<ShapeRLE>& lastShapes = (*previous)[previous->size() - 1];
+
+		for (int j = 0; j < lastShapes.size(); j++) {
+
+			bool shouldBreak = false;
+			for (int k = 0; k < unmatched.size(); k++) {
+
+				ShapeRLE& a = lastShapes[j];
+				ShapeRLE& b = *unmatched[k];
+
+				// for each shape from the last frame, compare against each shape in the current frame
+				float intersection = CenterRelativeIntersection(&a, &b);
+				bool intersectionGood = (intersection / lastShapes[j].area) <= params.maxAreaDifference;
+
+				float distance = Magnitude(Subtract(a.areaCenter, b.areaCenter));
+				bool distanceGood = distance <= params.maxDistance;
+
+				if (intersectionGood && distanceGood) {
+					newTracks.push_back(TrackedShapeRLE{ std::vector<ShapeRLE*>{&lastShapes[j]}, StatsShapeRLE{} });
+					unmatched.erase(unmatched.begin() + k);
+					shouldBreak = true;
+					break;
+				}
+			}
+			if (shouldBreak) {
+				break;
 			}
 		}
 	}
 
-
-
-	// in    ->    previously tracked, past frames, current frame, timeDeltas, descriminators like minTrackedTime
-
-	/* thonk 1
-	// calculate futures of previous with successful tracking of frame count minTrackedTime
-	
-
-	// match current to calculated future
-
-
-	// initialize tracking on leftovers 
-
-
-	// 
-	*/
-
-	/* thonk 2
-	// for each previously tracked blob, look for match in current frame -> possible hash insertie boi 
-	//																		thonk reducer for blobie 
-	//																		boi searchie thonkz
-
-	// for each remaining tracked blob that wasnt tracked into the current frame -> use alternative match finding method
-
-	// try simple tracking with some discrimination for acceptance 
-
-	// for remaining -> try overlay blobie thonk matchinator boiz (potentially periodic differing from main stuffs)
-	
-	*/
-
-	
-
+	for (TrackedShapeRLE t : newTracks) {
+		tracking->push_back(t);
+	}
 
 }
 
+inline cv::Vec3b ToCV_U8(ColorRGBi color) {
+	return cv::Vec3b{ (uchar)color.blue, (uchar)color.green, (uchar)color.red };
+}
+inline void PaintShape(cv::Mat* image, const ShapeRLE& shape) {
 
+	cv::Vec3b color = cv::Vec3b{ (uchar)shape.color.blue, (uchar)shape.color.green, (uchar)shape.color.red };
 
+	for (int y = 0; y < shape.rowRanges.size(); y++) {
+		for (const Range& range : shape.rowRanges[y]) {
+			for (int x = range.x1; x < (range.x2 + 1); x++) {
+				image->at<cv::Vec3b>(y, x) = color;
+			}
+		}
+	}
+}
+inline void PaintShape(cv::Mat* image, const ShapeRLE& shape, ColorRGBi color) {
 
+	cv::Vec3b cvColor = cv::Vec3b{ (uchar)color.blue, (uchar)color.green, (uchar)color.red };
 
+	for (int y = 0; y < shape.rowRanges.size(); y++) {
+		for (const Range& range : shape.rowRanges[y]) {
+			for (int x = range.x1; x < (range.x2 + 1); x++) {
+				image->at<cv::Vec3b>(y, x) = cvColor;
+			}
+		}
+	}
+}
+inline void PaintShape(cv::Mat* image, const ShapeRLE& shape, IntVec2 projection) {
 
+	cv::Vec3b color = cv::Vec3b{ (uchar)shape.color.blue, (uchar)shape.color.green, (uchar)shape.color.red };
+	projection.y += shape.rect.yMin;
 
+	for (int y = 0; y < shape.rowRanges.size(); y++) {
+		for (const Range& range : shape.rowRanges[y]) {
+			for (int x = range.x1; x < (range.x2 + 1); x++) {
+				image->at<cv::Vec3b>(projection.y + y, projection.x + x) = color;
+			}
+		}
+	}
+}
+inline void PaintShapeBlended(cv::Mat* image, const ShapeRLE& shape, IntVec2 projection, float amountOriginal, float amountNew) {
 
+	cv::Vec3b color = cv::Vec3b{ (uchar)shape.color.blue, (uchar)shape.color.green, (uchar)shape.color.red };
+	projection.y += shape.rect.yMin;
 
+	for (int y = 0; y < shape.rowRanges.size(); y++) {
+		for (const Range& range : shape.rowRanges[y]) {
+			for (int x = range.x1; x < (range.x2 + 1); x++) {
+				cv::Vec3b original = image->at<cv::Vec3b>(projection.y + y, projection.x + x);
+				image->at<cv::Vec3b>(projection.y + y, projection.x + x) = cv::Vec3b{
+					static_cast<uchar>((float(original[0]) * amountOriginal) + (float(color[0]) * amountNew)),
+					static_cast<uchar>((float(original[1]) * amountOriginal) + (float(color[1]) * amountNew)),
+					static_cast<uchar>((float(original[2]) * amountOriginal) + (float(color[2]) * amountNew))
+				};
+			}
+		}
+	}
+}
+inline void PaintShapes(cv::Mat* image, std::vector<ShapeRLE>* shapes) {
 
+	for (const ShapeRLE& shape : *shapes) {
+		PaintShape(image, shape);
+	}
+}
+inline void PaintShapes(cv::Mat* image, std::vector<ShapeRLE>* shapes, IntVec2 projection) {
 
+	for (const ShapeRLE& shape : *shapes) {
+		PaintShape(image, shape, projection);
+	}
+}
+inline void PaintShapesBlended(cv::Mat* image, std::vector<ShapeRLE>* shapes, IntVec2 projection, int blending) {
 
+	float amountOriginal = (255.0f - blending) / 255.0f;
+	float amountNew = (0.01f + blending) / 255.0f;
+	for (const ShapeRLE& shape : *shapes) {
+		PaintShapeBlended(image, shape, projection, amountOriginal, amountNew);
+	}
+}
+inline void PaintShapes(cv::Mat* image, std::vector<ShapeRLE>* shapes, ColorRGBi color) {
+
+	for (const ShapeRLE& shape : *shapes) {
+		PaintShape(image, shape);
+	}
+}
 
 // float deltaTime, int areaCheckThreshold, float distScale, float posMod, float areaMod, float rectMod, float rectRatioMod, float postModPAR, float discard, float accept
 inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, float _dt, TrackingSettings _tracking)
@@ -262,7 +353,7 @@ inline void ColorTrack_Test(cv::Mat* _out, BlobFrame& _last, BlobFrame& _now, fl
 		if (initialized[i])
 		{
 			int j = -1;
-			int biggest = 0;
+			float biggest = 0;
 			FloatVec2 move = FloatVec2{ 0.0 , 0.0 };
 			float velocity = 0.0;
 			for (int k = 0; k < scores[i].size(); k++)
@@ -364,30 +455,28 @@ inline void ConnectBlobsTemporal(cv::Mat* out, std::deque<BlobFrame>& in, int di
 
 }
 
-
 // walk 1 pixel to start
 // inset from -x 
 // -x || LEFT == black
 // came from LEFT 
 // came from BLACK
 // -y guaranteed black
-
+//
 // possible whites = +x , +y
 // clock wise -> check +x first, then +y 
 // if +x & +y == black ----> is a single pixel
-
+//
 // SEARCH ORDER CLOCKWISE
 // +x
 //  -y
 //   -x
 //    +y
-
+//
 // check first pixel to set state
 // always start look from -1 in the counter clockwise position
-
+//
 // walk perimeter  COUNTER CLOCKWISE  -by searching-   CLOCKWISE
 // 16 possible cases total, only will see 14 in loop
-
 std::vector<PixelCoord> PerimeterPixels(cv::Mat& img, PixelCoord start)
 {
 	// store outline pixels
@@ -466,15 +555,78 @@ std::vector<PixelCoord> PerimeterPixels(cv::Mat& img, PixelCoord start)
 
 // for each pixel, test left and right pixels color to determine if its a perimeter
 // pixel for a shape with respect to the x axis.
+std::vector<std::vector<PerimeterPoint>> PerimeterPointsThresholdedAxisX(cv::Mat* in) {
+
+	int xLim = in->cols - 1;
+	int yLim = in->rows;
+	std::vector<std::vector<PerimeterPoint>> points(in->rows, std::vector<PerimeterPoint>());
+
+	// handle left edge at x = 0
+	for (int y = 0; y < yLim; y++) {
+		if (in->at<uchar>(y, 0) && in->at<uchar>(y, 1)) {
+			points[y].push_back(PerimeterPoint(0));
+		}
+	}
+
+	// handle inbetween left and right edge
+	for (int x = 1; x < xLim; x++) {
+		for (int y = 0; y < yLim; y++) {
+			if (in->at<uchar>(y, x) && ((!(in->at<uchar>(y, x-1)) + !(in->at<uchar>(y, x+1))) == 1)) {
+				points[y].push_back(PerimeterPoint{ x });
+			}
+		}
+	}
+
+	// handle right edge at x = xLim 
+	for (int y = 0; y < yLim; y++) {
+		if (in->at<uchar>(y, xLim) && in->at<uchar>(y, xLim - 1)) {
+			points[y].push_back(PerimeterPoint(xLim));
+		}
+	}
+
+	return points;
+}
+// for each pixel, test left and right pixels color to determine if its a perimeter
+// pixel for a shape with respect to the x axis.
+std::vector<std::vector<PerimeterPoint>> PerimeterPointsAxisX(cv::Mat* in, int colorMax) {
+
+	int colorStep = round(colorMax / 2) - 1;
+	int xLim = in->cols - 1;
+	int yLim = in->rows;
+	std::vector<std::vector<PerimeterPoint>> points(in->rows, std::vector<PerimeterPoint>());
+
+	// handle left edge at x = 0
+	for (int y = 0; y < yLim; y++) {
+		if ((in->at<cv::Vec3b>(y, 0)[0] == colorMax) && (in->at<cv::Vec3b>(y, 1)[0] == colorMax)) {
+			points[y].push_back(PerimeterPoint(0));
+		}
+	}
+
+	// handle inbetween left and right edge
+	for (int x = 1; x < xLim; x++) {
+		for (int y = 0; y < yLim; y++) {
+			if ((in->at<cv::Vec3b>(y, x)[0] == colorMax) && ((!(in->at<cv::Vec3b>(y, x-1)[0] == colorMax) + !(in->at<cv::Vec3b>(y, x+1)[0] == colorMax)) == 1)) {
+				points[y].push_back(PerimeterPoint{ x });
+			}
+		}
+	}
+
+	// handle right edge at x = xLim 
+	for (int y = 0; y < yLim; y++) {
+		if ((in->at<cv::Vec3b>(y, xLim)[0] == colorMax) && (in->at<cv::Vec3b>(y , xLim - 1)[0] == colorMax)) {
+			points[y].push_back(PerimeterPoint(xLim));
+		}
+	}
+
+	return points;
+}
+/*
 std::vector<std::vector<PerimeterPoint>> PerimeterPointsAxisX(cv::Mat* in, int colorMax, int xMax, int yMax) {
 
 	int colorStep = round(colorMax / 2) - 1;
 	int xLim = in->rows - 1;
 	int yLim = in->cols;
 	std::vector<std::vector<PerimeterPoint>> points(in->cols, std::vector<PerimeterPoint>());
-
-	//use for non branching code in the future, using resulting bool to multiple the index. index 0 will be junk to discard
-	//std::vector<int> ySize = std::vector<int>(in->cols);
 
 	// handle left edge at x = 0
 	for (int y = 0; y < yLim; y++) {
@@ -492,7 +644,7 @@ std::vector<std::vector<PerimeterPoint>> PerimeterPointsAxisX(cv::Mat* in, int c
 		}
 	}
 
-	// handle right edge at x = xLim 
+	// handle right edge at x = xLim
 	for (int y = 0; y < yLim; y++) {
 		if ((in->at<cv::Vec3b>(xLim, y)[0] == colorMax) && (in->at<cv::Vec3b>(xLim - 1, y)[0] == colorMax)) {
 			points[y].push_back(PerimeterPoint(xLim));
@@ -501,9 +653,10 @@ std::vector<std::vector<PerimeterPoint>> PerimeterPointsAxisX(cv::Mat* in, int c
 
 	return points;
 }
+*/
 // for each pixel, test left and right pixels color to determine if its a perimeter
 // pixel for a shape with respect to the x axis.
-std::vector<std::vector<PerimeterPoint>> PerimeterPointsAxisX_Expirimental(cv::Mat* in, int colorMax, int xMax, int yMax) {
+/*std::vector<std::vector<PerimeterPoint>> PerimeterPointsAxisX_Expirimental(cv::Mat* in, int colorMax, int xMax, int yMax) {
 
 	int colorStep = round(colorMax / 2) - 1;
 	int xLim = in->rows - 1;
@@ -547,6 +700,149 @@ std::vector<std::vector<PerimeterPoint>> PerimeterPointsAxisX_Expirimental(cv::M
 	}
 
 	return result;
+}*/
+
+inline std::vector<ShapeRLE> SegmentBinaryImage(cv::Mat* in) {
+
+	std::vector<std::vector<PerimeterPoint>> points = PerimeterPointsThresholdedAxisX(in); // sorted (y, i)
+	
+	std::vector<std::vector<FillNode>> nodes = std::vector<std::vector<FillNode>>(in->rows);
+	std::vector<FillNodeIndex> indices = std::vector<FillNodeIndex>(0); // fill node index contains the y coord of the range of pixels as y, and the index into the y ranges vector as i
+
+	int id = 0;
+	for (int y = 0; y < points.size(); y++) {
+		for (int i = 0; i < points[y].size(); i += 2) {
+			nodes[y].push_back(FillNode{ false, false, id++, FillNodeIndex{ y, i / 2 }, points[y][i], points[y][(size_t)i + 1], points[y][(size_t)i + 1] - points[y][i], std::vector<int>(0), std::vector<FillNodeIndex>(0) });
+			indices.push_back(FillNodeIndex{ y, i / 2 });
+		}
+	}
+
+	// for each node test if each range in the above nodes intersects its range.
+	// if it intersects, push back a FillNodeIndex into its connections, to reference it. 
+	// thus generating a tree that collides with itself.
+	for (int y = 0; y < nodes.size() - 1; y++){
+		int y2 = y + 1; // row above y
+		for (int i = 0; i < nodes[y].size(); i++){
+			for (int k = 0; k < nodes[y2].size(); k++){
+				if (RangesIntersect(nodes[y][i].x1, nodes[y][i].x2, nodes[y2][k].x1, nodes[y2][k].x2)){
+					nodes[y][i].connections.push_back(nodes[y2][k].index);
+					nodes[y2][k].connections.push_back(nodes[y][i].index);
+				}
+			}
+		}
+	}
+
+	// walk shape indices until tree is constructed of fill node indices,
+	// which represent the shapes pixel data.
+	std::vector<FillNodeIndex> open;
+	std::vector<std::vector<FillNodeIndex>> shapesIndices;
+	for (int s = 0, k = 0; s < indices.size(); s++){
+		// working on shape at k index
+		shapesIndices.push_back(std::vector<FillNodeIndex>());
+		open.push_back(indices[s]);
+		
+		// remove first from open, push back all connections, until there are no connections.
+		// store indices of connections in the k index for the shapes range indices data.
+		while (open.size()){
+			FillNodeIndex index = open.back();
+			open.pop_back();
+
+			if (nodes[index.y][index.i].walked == false){
+				shapesIndices[k].push_back(index);
+				nodes[index.y][index.i].walked = true;
+
+				// for each connection to the FillNode push it back into open.
+				for (int c = 0; c < nodes[index.y][index.i].connections.size(); c++){
+					open.push_back(nodes[index.y][index.i].connections[c]);
+				}
+			}
+		}
+		k++;
+	}
+
+	// for each set of indices for a given shape
+	std::vector<ShapeRLE> shapes = std::vector<ShapeRLE>();
+	std::vector<std::vector<FillNodeIndex>*> shapeIndicesPtrs = std::vector<std::vector<FillNodeIndex>*>();
+	for (int c = 0; c < shapesIndices.size(); c++)
+	{
+		ShapeRLE shape = ShapeRLE{};
+		std::vector<FillNodeIndex>* shapeIndicesPtr = &shapesIndices[c];
+		float xTotal = 0.0;
+		float yTotal = 0.0;
+		float coords = 0.0;
+
+		int xMin = std::numeric_limits<int>::max();
+		int yMin = std::numeric_limits<int>::max();
+		int xMax = 0;
+		int yMax = 0;
+		for (int w = 0; w < shapeIndicesPtr->size(); w++)
+		{
+			FillNode& node = nodes[(*shapeIndicesPtr)[w].y][(*shapeIndicesPtr)[w].i];
+			float nodeArea = (node.x2 - node.x1) + 1;
+			shape.area += nodeArea;
+
+			if (node.x1 < xMin)
+			{
+				xMin = node.x1;
+			}
+			if (node.x2 > xMax)
+			{
+				xMax = node.x2;
+			}
+			if ((*shapeIndicesPtr)[w].y < yMin)
+			{
+				yMin = (*shapeIndicesPtr)[w].y;
+			}
+			if ((*shapeIndicesPtr)[w].y > yMax)
+			{
+				yMax = (*shapeIndicesPtr)[w].y;
+			}
+		}
+
+		shape.areaCenter = FloatVec2{ xTotal / coords, yTotal / coords };
+		shape.rect = Rectangle{ xMin, yMin, xMax, yMax }; 
+		Rectangle& rect = shape.rect;
+		shape.height = yMax - yMin;
+		shape.width = xMax - xMin;
+		shapes.push_back(shape);
+		shapeIndicesPtrs.push_back(shapeIndicesPtr);
+	}
+
+	// sort ranges and push into shape 
+	int index = 0;
+	for (ShapeRLE& shape : shapes) {
+
+		std::vector<FillNodeIndex>* shapeNodeIndices = shapeIndicesPtrs[index];
+
+		shape.rowRanges = std::vector<std::vector<Range>>(shapeNodeIndices->size());
+
+		for (FillNodeIndex& f : *shapeNodeIndices) {
+			FillNode n = nodes[f.y][f.i];
+			Range r = { n.x1, n.x2 };
+			shape.rowRanges[f.y - shape.rect.yMin].push_back(r);
+		}
+
+		for (std::vector<Range>& row : shape.rowRanges) {
+			std::vector<std::tuple<int, int>> sorting = std::vector<std::tuple<int, int>>(row.size());
+			for (int i = 0; i < sorting.size(); i++) {
+				sorting[i] = std::make_tuple(row[i].x1, i);
+			}
+			std::sort(sorting.begin(), sorting.end());
+			std::vector<Range> sorted = std::vector<Range>(0);
+			for (std::tuple<int, int> mapping : sorting) {
+				int index = std::get<1>(mapping);
+				Range r = row[index];
+				sorted.push_back(r);
+			}
+			row = sorted;
+		}
+
+		shape.color = RandomColor();
+
+		index++;
+	}
+
+	return shapes;
 }
 
 inline std::vector<ShapeRLE> ExtractShapesRLE(cv::Mat* in) {
@@ -694,14 +990,14 @@ inline std::vector<ShapeRLE> ExtractShapesRLE(cv::Mat* in) {
 		shape.rowRanges = std::vector<std::vector<Range>>(b.size.height);
 		shape.area = b.area;
 		shape.areaCenter = b.centerOfArea;
-		shape.bounds = b.rect;
+		shape.rect = b.rect;
 		shape.width = b.size.width;
 		shape.height = b.size.height;
 
 		for (FillNodeIndex f : b.indices) {
 			FillNode n = frame.nodes[f.y][f.i];
 			Range r = { n.x1, n.x2 };
-			shape.rowRanges[f.y - shape.bounds.yMin].push_back(r);
+			shape.rowRanges[f.y - shape.rect.yMin].push_back(r);
 		}
 
 		for (std::vector<Range>& row : shape.rowRanges) {
@@ -731,7 +1027,7 @@ inline void GetBlobs(cv::Mat* in, cv::Mat* out, int max, int minSize, BlobFrame&
 	int xLim = in->rows - 1;
 	int yLim = in->cols;
 
-	std::vector<std::vector<PerimeterPoint>> points = PerimeterPointsAxisX(in, max, in->rows - 1, in->cols);
+	std::vector<std::vector<PerimeterPoint>> points = PerimeterPointsAxisX(in, max);
 
 	// push the points into "nodes" and store them.
 	int id = 0;

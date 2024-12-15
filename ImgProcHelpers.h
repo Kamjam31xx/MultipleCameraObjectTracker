@@ -48,6 +48,10 @@ inline bool ContainsCoord(std::vector<PixelCoord>& pixels, PixelCoord val) {
 	}
 	return false;
 }
+template <typename T>
+inline T Subtract(T a, T b) {
+	return T{ a.x - b.x, a.y - b.y };
+}
 inline bool PixelInBounds(PixelCoord* p, int width, int height)
 {
 	if ((p->x >= 0) && (p->x < width) && (p->y >= 0) && (p->y < height))
@@ -90,9 +94,9 @@ inline IntLine SwapAB(IntLine input) {
 inline PixelCoord Add(PixelCoord a, PixelCoord b) {
 	return PixelCoord{ a.x + b.x, a.y + b.y };
 }
-bool PointIsInCornerPinRect(CornerPinRect* bounds, int x, int y)
+bool PointIsInCornerPinRect(CornerPinRect* rect, int x, int y)
 {
-	if (x > bounds->x && x < bounds->x + bounds->w && y > bounds->y && y < bounds->y + bounds->h)
+	if (x > rect->x && x < rect->x + rect->w && y > rect->y && y < rect->y + rect->h)
 	{
 		return true;
 	}
@@ -114,27 +118,27 @@ void GenerateLightMasksFrame(cv::Mat* color, cv::Mat* mask, cv::Mat* output)
 }
 inline void ColorPixel(cv::Mat* img, PixelCoord px, int red, int green, int blue)
 {
-	(*img).at<cv::Vec3b>(px.x, px.y)[0] = blue;
-	(*img).at<cv::Vec3b>(px.x, px.y)[1] = green;
-	(*img).at<cv::Vec3b>(px.x, px.y)[2] = red;
+	(*img).at<cv::Vec3b>(px.y, px.x)[0] = blue;
+	(*img).at<cv::Vec3b>(px.y, px.x)[1] = green;
+	(*img).at<cv::Vec3b>(px.y, px.x)[2] = red;
 }
 inline void ColorPixel(cv::Mat* img, PixelCoord px, ColorRGBi c)
 {
-	(*img).at<cv::Vec3b>(px.x, px.y)[0] = c.blue;
-	(*img).at<cv::Vec3b>(px.x, px.y)[1] = c.green;
-	(*img).at<cv::Vec3b>(px.x, px.y)[2] = c.red;
+	(*img).at<cv::Vec3b>(px.y, px.x)[0] = c.blue;
+	(*img).at<cv::Vec3b>(px.y, px.x)[1] = c.green;
+	(*img).at<cv::Vec3b>(px.y, px.x)[2] = c.red;
 }
 inline void AddColorPixel(cv::Mat* img, PixelCoord px, ColorRGBi c)
 {
-	(*img).at<cv::Vec3b>(px.x, px.y)[0] += c.blue;
-	(*img).at<cv::Vec3b>(px.x, px.y)[1] += c.green;
-	(*img).at<cv::Vec3b>(px.x, px.y)[2] += c.red;
+	(*img).at<cv::Vec3b>(px.y, px.x)[0] += c.blue;
+	(*img).at<cv::Vec3b>(px.y, px.x)[1] += c.green;
+	(*img).at<cv::Vec3b>(px.y, px.x)[2] += c.red;
 }
 inline void MulColorPixel(cv::Mat* img, PixelCoord px, ColorRGBi c)
 {
-	(*img).at<cv::Vec3b>(px.x, px.y)[0] *= c.blue;
-	(*img).at<cv::Vec3b>(px.x, px.y)[1] *= c.green;
-	(*img).at<cv::Vec3b>(px.x, px.y)[2] *= c.red;
+	(*img).at<cv::Vec3b>(px.y, px.x)[0] *= c.blue;
+	(*img).at<cv::Vec3b>(px.y, px.x)[1] *= c.green;
+	(*img).at<cv::Vec3b>(px.y, px.x)[2] *= c.red;
 }
 
 bool aInB(std::vector<PixelCoord>* a, PixelCoord xIntercept)
@@ -179,7 +183,10 @@ inline bool NumInRangeMinMax(int n, int min, int max)
 {
 	return (min <= n) && (max >= n);
 }
-
+inline bool NumInRangeMinMax(int n, Range r)
+{
+	return (r.x1 <= n) && (r.x2 >= n);
+}
 
 inline bool RangesIntersect(PerimeterPoint a0, PerimeterPoint a1, PerimeterPoint b0, PerimeterPoint b1)
 {
@@ -251,7 +258,7 @@ inline void ConnectColorFrameToFrame(cv::Mat* out, BlobFrame& frame, BlobFrame& 
 }
 inline float MinRatio(int a, int xIntercept)
 {
-	return (a > xIntercept) ? (a / xIntercept) : (xIntercept / a);
+	return (a > static_cast<float>(xIntercept)) ? (a / static_cast<float>(xIntercept)) : (xIntercept / static_cast<float>(a));
 }
 /*inline float Distance(FloatVec2 a, FloatVec2 xIntercept)
 {
@@ -337,16 +344,19 @@ inline float QuadScore3D(float max, FloatVec3 a, FloatVec3 xIntercept, FloatVec3
 	return max * NormalizedCosBell(g * (x + y + z));
 }
 
-Stats StatsForFloats(std::vector<float> values) {
-
+template<typename T> Stats StatsFor(std::vector<T> values) {
 	Stats out;
+
+	if (values.size() < 2) {
+		return out;
+	}
 
 	out.count = values.size();
 	out.min = std::numeric_limits<float>::max();
 	out.max = std::numeric_limits<float>::min();
-	out.median = values[values.size() / 2];
 
-	for (float val : values) {
+	for (T item : values) {
+		float val = static_cast<float>(item);
 		out.sum += val;
 		if (val < out.min) {
 			out.min = val;
@@ -360,96 +370,179 @@ Stats StatsForFloats(std::vector<float> values) {
 	out.mean = out.sum / out.count;
 
 	float sumDeviationSquares = 0.0;
-	for (float val : values) {
-		sumDeviationSquares += pow(val - out.mean, 2);
+	for (T item : values) {
+		sumDeviationSquares += powf(static_cast<float>(item) - out.mean, 2);
 	}
 	out.sd = sumDeviationSquares / out.count;
-	out.cv = out.sd / out.mean;
+	out.cv = out.mean == 0 ? 0 : out.sd / out.mean;
 
 	std::sort(values.begin(), values.end());
-	int endQ1 = (values.size() / 2) - 1;
-	int sumQ1 = 0.0;
-	int countQ1 = 0;
-	for (int i = 0; i < endQ1; i++) {
-		countQ1++;
-		sumQ1 += values[i];
-	}
-	out.q1 = sumQ1 / countQ1;
-
-	int startQ3 = values.size() % 2 ? values.size() / 2 : (values.size() / 2) + 1;
-	int sumQ3 = 0.0;
-	int countQ3 = 0;
-	for (int i = startQ3; i < values.size(); i++) {
-		countQ3++;
-		sumQ3 += values[i];
-	}
-	out.q3 = sumQ3 / countQ3; // potential divide by zero
-
-	out.iqr = out.q3 - out.q1;
-	out.skewness = (out.mean - out.median) / out.sd;
-
-	return out;
-}
-
-Stats StatsForInts(std::vector<int> values) {
-
-	Stats out;
-
-	out.count = values.size();
-	out.min = std::numeric_limits<float>::max();
-	out.max = std::numeric_limits<float>::min();
 	out.median = values[values.size() / 2];
-
-	for (int val : values) {
-		out.sum += val;
-		if (val < out.min) {
-			out.min = val;
-		}
-		if (val > out.max) {
-			out.max = val;
-		}
-	}
-
-	out.range = abs(out.max - out.min);
-	out.mean = out.sum / out.count;
-
-	float sumDeviationSquares = 0.0;
-	for (int val : values) {
-		sumDeviationSquares += pow(val - out.mean, 2);
-	}
-	out.sd = sumDeviationSquares / out.count;
-	out.cv = out.sd / out.mean;
-
-	std::sort(values.begin(), values.end());
 	int endQ1 = (values.size() / 2) - 1;
-	int sumQ1 = 0.0;
+	float sumQ1 = 0.0;
 	int countQ1 = 0;
 	for (int i = 0; i < endQ1; i++) {
 		countQ1++;
-		sumQ1 += values[i];
+		sumQ1 += static_cast<float>(values[i]);
 	}
-	out.q1 = sumQ1 / countQ1;
+	out.q1 = sumQ1 / (float)countQ1;
 
 	int startQ3 = values.size() % 2 ? values.size() / 2 : (values.size() / 2) + 1;
-	int sumQ3 = 0.0;
+	float sumQ3 = 0.0;
 	int countQ3 = 0;
 	for (int i = startQ3; i < values.size(); i++) {
 		countQ3++;
-		sumQ3 += values[i];
+		sumQ3 += static_cast<float>(values[i]);
 	}
-	out.q3 = sumQ3 / countQ3;
+	out.q3 = sumQ3 / (float)countQ3;
 
 	out.iqr = out.q3 - out.q1;
-	out.skewness = (out.mean - out.median) / out.sd;
+	out.skewness = out.sd == 0 ? 0 : (out.mean - out.median) / out.sd;
 
 	return out;
 }
+float SampleIntensityNearestRGBU8(cv::Mat* src, float scaling, IntVec2 coords) {
+	coords = IntVec2{ static_cast<int>(round(scaling * coords.x)), static_cast<int>(round(scaling * coords.y)) };
+	cv::Vec3b pixel = src->at<cv::Vec3b>(coords.x, coords.y);
+	return static_cast<float>(pixel[0] + pixel[1] + pixel[2]) / 3.0;
+}
+bool CoordInShapeRLE(ShapeRLE* shape, IntVec2 coords) {
+	if (shape->rowRanges[coords.y].size()) {
+		for (Range r : shape->rowRanges[coords.y]) {
+			if (r.x1 <= coords.x && coords.x <= r.x2) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+/*
+FloatVec3 ComparisonShapesIntensityRGBU8(cv::Mat* aSrcColor, cv::Mat* bSrcColor, cv::Mat* aSrcThresh, cv::Mat* bSrcThresh, ShapeRLE* a, ShapeRLE* b, int downScaling) {
 
-float CompareShapesThresholded(cv::Mat* previous, cv::Mat* current, ShapeRLE* in, ShapeRLE* reference) {
+	// a is the reference, and so b is fit to a
+	cv::Mat aPixels(cv::Size(a->height, a->width), CV_8UC3, cv::Scalar(0,0,0));
+	cv::Mat bPixels(cv::Size(b->height, b->width), CV_8UC3, cv::Scalar(0,0,0));
 
+	// populate pixel data
+	// set pixel data for aPixels
+	for (int y = 0; y < a->rowRanges.size(); y++) {
+		for (Range r : a->rowRanges[y]) {
+			int end = r.x2 + 1;
+			for (int x = r.x1; x < end; x++) {
+				aPixels.at<cv::Vec3b>(x - a->bounds.xMin, y - a->bounds.yMin) = aSrcColor->at<cv::Vec3b>(x, y);
+			}
+		}
+	}
+	// set pixel data for bPixels
+	for (int y = 0; y < b->rowRanges.size(); y++) {
+		for (Range r : b->rowRanges[y]) {
+			int end = r.x2 + 1;
+			for (int x = r.x1; x < end; x++) {
+				bPixels.at<cv::Vec3b>(x - b->bounds.xMin, y - b->bounds.yMin) = bSrcColor->at<cv::Vec3b>(x, y);
+			}
+		}
+	}
+
+	// resize b to match a with bi-linear interpolation
+	FloatVec2 scaling = { (a->width / b->width) / downScaling, (a->height / b->height) / downScaling };
+	cv::resize(bPixels, bPixels, cv::Size(), scaling.x, scaling.y, cv::INTER_LINEAR);
+	
+	// sum color values
+	FloatVec3 sumA = { 0.0, 0.0, 0.0 };
+	FloatVec3 sumB = { 0.0, 0.0, 0.0 };
+	FloatVec3 sumAB = { 0.0, 0.0, 0.0 };
+
+	for (int x = 0; x < aPixels.cols; x++) {
+		for (int y = 0; y < aPixels.rows; y++) {
+			cv::Vec3b pxA = aPixels.at<cv::Vec3b>(x, y);
+			cv::Vec3b pxB = bPixels.at<cv::Vec3b>(x, y);
+
+			sumA.x += 
+		}
+	}
+	
+	
 
 	return 0.0;
+}*/
+
+int CenterRelativeIntersection(ShapeRLE* a, ShapeRLE* b) {
+
+	// shift y indexing on b by relative difference in center of mass rounded down
+	IntVec2 offsetB = { b->areaCenter.y - a->areaCenter.y, b->areaCenter.x - a->areaCenter.x };
+
+	int intersectionArea = 0;
+
+	for (int aY = 0; aY < a->rowRanges.size(); aY++) {
+
+		int bY = aY + offsetB.y;
+		
+		std::vector<Range>& aRanges = a->rowRanges[aY];
+		std::vector<Range>& bRanges = b->rowRanges[bY];
+
+		// per row sum the LOGICAL_AND results per pixel between (a,b) from its compressed RLE format
+		for (int ai = 0, bi = 0; (ai < aRanges.size()) && (bi < bRanges.size());) {
+
+			Range aRange = aRanges[ai];
+			Range bRange = bRanges[bi];
+			bRange.x1 += offsetB.x;
+			bRange.x2 += offsetB.x;
+
+			Range intersection = { std::max(aRange.x1, bRange.x1), std::min(aRange.x2, bRange.x2) };
+			bool intersects = intersection.x2 < intersection.x1;
+			intersectionArea += intersects * (intersection.x2 - intersection.x1);
+
+			bool stepAB = aRange.x2 == bRange.x2;
+			bool stepA = bRange.x2 > aRange.x2;
+			bool stepB = aRange.x2 > bRange.x2;
+
+			ai += stepAB || stepA;
+			bi += stepAB || stepB;
+		}
+	}
+
+	return intersectionArea;
 }
+/*
+float CenterRelativeIntersectionCosineBellWeighted(ShapeRLE* a, ShapeRLE* b) {
+
+	// shift y indexing on b by relative difference in center of mass rounded down
+	IntVec2 offsetB = { b->areaCenter.y - a->areaCenter.y, b->areaCenter.x - a->areaCenter.x };
+
+	int intersectionArea = 0;
+
+	for (int aY = 0; aY < a->rowRanges.size(); aY++) {
+
+		int bY = aY + offsetB.y;
+
+		std::vector<Range>& aRanges = a->rowRanges[aY];
+		std::vector<Range>& bRanges = b->rowRanges[bY];
+
+		// per row sum the LOGICAL_AND results per pixel between (a,b) from its compressed RLE format
+		for (int ai = 0, int bi = 0; ai < aRanges.size() && bi < bRanges.size();) {
+
+			Range aRange = aRanges[ai];
+			Range bRange = bRanges[bi];
+			bRange.x1 += offsetB.x;
+			bRange.x2 += offsetB.x;
+
+			float r = Magnitude(FloatVec2{bRan})
+
+			Range intersection = { std::max(aRange.x1, bRange.x1), std::min(aRange.x2, bRange.x2) };
+			bool intersects = intersection.x2 < intersection.x1;
+			intersectionArea += intersects * (intersection.x2 - intersection.x1);
+
+			bool stepAB = aRange.x2 == bRange.x2;
+			bool stepA = bRange.x2 > aRange.x2;
+			bool stepB = aRange.x2 > bRange.x2;
+
+			ai += stepAB || stepA;
+			bi += stepAB || stepB;
+		}
+	}
+
+	return intersectionArea;
+}*/
 float CompareShapesColor() {
 	return 0.0;
 }
@@ -460,8 +553,9 @@ float CompareShapesDerivative() {
 inline float Velocity2D(float x0, float y0, float x1, float y1, float time) {
 	return time * abs(sqrtf(pow(x0 - x1, 2) + pow(y0 - y1, 2)));
 }
-inline float Magnitude(FloatVec2 v) {
-	return sqrtf(powf(v.x, 2) + pow(v.y, 2));
+template <typename T> 
+inline float Magnitude(T v) {
+	return sqrtf(powf(static_cast<float>(v.x), 2) + pow(static_cast<float>(v.y), 2));
 }
 inline FloatVec2 UnitVector(FloatVec2 v) {
 	float magnitude = Magnitude(v);

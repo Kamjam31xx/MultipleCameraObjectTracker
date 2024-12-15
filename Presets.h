@@ -12,6 +12,7 @@ struct OV9750 {
 	Inches diagonal = 6.0f * MILLIMETERS_TO_INCHES;
 	Inches width = 4.8f * MILLIMETERS_TO_INCHES;
 	Inches height = 3.6f * MILLIMETERS_TO_INCHES;
-	IntVec2 imageSize = IntVec2{ 1280, 960 };
+	IntVec2 imageSize = IntVec2{ 2560, 960 };
 	float xFovDegrees = 100.0f;
+	bool stereo = true;
 };

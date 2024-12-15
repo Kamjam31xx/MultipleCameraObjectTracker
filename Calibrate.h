@@ -52,15 +52,15 @@ namespace Calibrate {
 			}
 		}
 		
-		return selected.bounds;
+		return selected.rect;
 	}
 
 	// find the grid center, and return its center of mass coordinates in view space for the camera
-	FloatVec2 GridCenter(std::vector<ShapeRLE> shapes, Rectangle bounds) {
+	FloatVec2 GridCenter(std::vector<ShapeRLE> shapes, Rectangle rect) {
 
-		float xSpan = bounds.xMax - bounds.xMin;
-		float ySpan = bounds.yMax - bounds.yMin;
-		FloatVec2 estimatedCenter = { bounds.xMin + (xSpan / 2.0f), bounds.yMin + (ySpan / 2.0f) };
+		float xSpan = rect.xMax - rect.xMin;
+		float ySpan = rect.yMax - rect.yMin;
+		FloatVec2 estimatedCenter = { rect.xMin + (xSpan / 2.0f), rect.yMin + (ySpan / 2.0f) };
 		float sizeModifier = 1.25f;
 		FloatVec2 estimatedSizeMax = { sizeModifier * xSpan / 10.0f, sizeModifier * ySpan / 10.0f };
 		
@@ -82,7 +82,7 @@ namespace Calibrate {
 			return closest.areaCenter;
 		}
 		else {
-			return FloatVec2{bounds.xMin + (xSpan / 2.0f), bounds.yMin + (ySpan / 2.0f)};
+			return FloatVec2{rect.xMin + (xSpan / 2.0f), rect.yMin + (ySpan / 2.0f)};
 		}
 	}
 
@@ -186,13 +186,13 @@ namespace Calibrate {
 		std::vector<ShapeRLE> shapesEroded = ExtractShapesRLE(&eroded);
 
 		// find initial bounds & center
-		Rectangle bounds = GridRectangle(shapesEroded);
-		FloatVec2 center = GridCenter(shapesEroded, bounds);
+		Rectangle rect = GridRectangle(shapesEroded);
+		FloatVec2 center = GridCenter(shapesEroded, rect);
 		std::vector<GridLine> lines = std::vector<GridLine>(0);
 		
 		// estimate size for sliding perimeter slope window
 		int gridSize = 10;
-		float cellPerimeterEstimate = (2.0f * (bounds.xMax - bounds.xMin + bounds.yMax - bounds.yMin)) / gridSize;
+		float cellPerimeterEstimate = (2.0f * (rect.xMax - rect.xMin + rect.yMax - rect.yMin)) / gridSize;
 		int windowSize = floorf(cellPerimeterEstimate / 8.0f); // can use edge count divided by (sides + mod) as well
 		if (windowSize % 2 != 0) {
 			// ensure window size is even so that it has a center
@@ -201,8 +201,8 @@ namespace Calibrate {
 
 		// set basic information to estimate positions
 		int cellCount = Squared(gridSize);
-		float xSpan = bounds.xMax - bounds.xMin;
-		float ySpan = bounds.yMax - bounds.yMin;
+		float xSpan = rect.xMax - rect.xMin;
+		float ySpan = rect.yMax - rect.yMin;
 		float sizeModifier = 1.0f / gridSize;
 		FloatVec2 estimatedCellSize = FloatVec2{ sizeModifier * xSpan, sizeModifier * ySpan};
 		float sizeModifierMax = 2.0f;
@@ -219,8 +219,8 @@ namespace Calibrate {
 		// use local normalized positions to insert shape indices into a table for testing
 		std::vector<std::vector<int>> sortedShapeIndices = std::vector<std::vector<int>>(cellCount);
 		for (int i = 0; i < shapes.size(); i++) {
-			int xGrid = (int)floorf(gridSize * (shapes[i].areaCenter.x - bounds.xMin) / xSpan);
-			int yGrid = (int)floorf(gridSize * (shapes[i].areaCenter.y - bounds.yMin) / ySpan);
+			int xGrid = (int)floorf(gridSize * (shapes[i].areaCenter.x - rect.xMin) / xSpan);
+			int yGrid = (int)floorf(gridSize * (shapes[i].areaCenter.y - rect.yMin) / ySpan);
 			int cellIndex = xGrid + (gridSize * yGrid);
 			sortedShapeIndices[cellIndex].push_back(i);
 		}
@@ -243,7 +243,7 @@ namespace Calibrate {
 
 		// generate per-pixel permimeter paths for each grid cells corresponding shape
 		std::vector<LinePerimeter> perimeterPaths = std::vector<LinePerimeter>(cellCount);
-		PixelCoord px = PixelCoord{ static_cast<int>(floorf(bounds.xMin)), static_cast<int>(floorf(bounds.yMin)) };
+		PixelCoord px = PixelCoord{ static_cast<int>(floorf(rect.xMin)), static_cast<int>(floorf(rect.yMin)) };
 		std::vector<CellQuad> gridCellQuads = std::vector<CellQuad>(cellCount);
 		int cellQuadIndex = 0;
 		for (int i : cellShapeIndices) {
@@ -252,7 +252,7 @@ namespace Calibrate {
 
 			// for each shape find the polygon of the shape
 			while (searching) {
-				PixelCoord startPixel = PixelCoord{ shape.rowRanges[0][0].x1, shape.bounds.yMin };
+				PixelCoord startPixel = PixelCoord{ shape.rowRanges[0][0].x1, shape.rect.yMin };
 				std::vector<PixelCoord> perimeterPixels = PerimeterPixels(img, startPixel);
 				std::vector<IntLine> lines; 
 				FindLines(img, &lines, perimeterPixels);
@@ -477,7 +477,7 @@ namespace Calibrate {
 		
 
 
-		return Grid{ FloatRectangle{float(bounds.xMin), float(bounds.yMin), float(bounds.xMax), float(bounds.yMax)}, gridLinePoints, gridCells, center };
+		return Grid{ FloatRectangle{float(rect.xMin), float(rect.yMin), float(rect.xMax), float(rect.yMax)}, gridLinePoints, gridCells, center };
 	}
 
 	// takes known measurements and returns the corresponding grid for those measurements

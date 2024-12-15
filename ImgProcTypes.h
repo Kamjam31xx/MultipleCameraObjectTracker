@@ -22,14 +22,25 @@ struct Float64SlopeInterceptRotation {
 	double degrees;
 };
 struct Float32SlopeInterceptRotation {
-	float m;
-	float b;
-	float degrees;
+	float m = 0.0;
+	float b = 0.0;
+	float degrees = 0.0;
 };
 
 struct IndexRange {
 	int begin;
 	int endExclusive;
+};
+
+struct Float32ColorRGB {
+	float r = 0.0;
+	float g = 0.0;
+	float b = 0.0;
+};
+struct ComparisonFloat32ColorRGB {
+	Float32ColorRGB a = Float32ColorRGB{};
+	Float32ColorRGB b = Float32ColorRGB{};
+	Float32ColorRGB ab = Float32ColorRGB{};
 };
 
 struct Position3 {
@@ -227,8 +238,9 @@ struct ShapeRLE {
 	FloatVec2 areaCenter;
 	int width;
 	int height;
-	Rectangle bounds;
+	Rectangle rect;
 	std::vector<std::vector<Range>> rowRanges;
+	ColorRGBi color = ColorRGBi{ 127, 127, 127 };
 };
 struct Stats {
 	int count = 0;
@@ -256,12 +268,19 @@ struct StatsShapeRLE {
 	Stats height;
 };
 struct TrackedShapeRLE {
-	std::vector<ShapeRLE*> shapePtrs;
+	std::vector<ShapeRLE*> shapePtrs = std::vector<ShapeRLE*>();
 	StatsShapeRLE stats;
+	float age = 0.0;
 };
 struct TrackingParameters {
+
+	// complicated way
 	float velocityMaxDifference = 10.0f;
-	float directionMaxDifference = 3.14159 / sqrt(2.0);
+	float directionMaxDifference = 3.14159f / sqrtf(2.0f);
+
+	// simple stupid way
+	float maxAreaDifference = 0.2;
+	float maxDistance = 30;
 };
 
 struct BlobFrame
@@ -371,7 +390,7 @@ struct GridCell {
 	CellQuad quad;
 };
 struct Grid {
-	FloatRectangle bounds;
+	FloatRectangle rect;
 	std::array<std::array<FloatVec2, 11>, 11> linePointMat;
 	std::array<std::array<GridCell, 10>, 10> cellMat;
 	FloatVec2 center;

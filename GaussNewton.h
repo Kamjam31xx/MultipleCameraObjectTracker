@@ -102,7 +102,7 @@ PolyN GaussNewtonPolyN(std::vector<double> xi, std::vector<double> yi, int n) {
 		cv::invert(jacobian, psuedoInverse); // note : check flags 
 		CalcResiduals(residuals, xi, yi, betas, PolyNResiduals);
 
-		// calculate the new betas
+		// calculate the new betas  ->  next betas equals current betas - delta 
 		betas = betas - (psuedoInverse * residuals);
 
 		// calculate the sum of squares of the residuals

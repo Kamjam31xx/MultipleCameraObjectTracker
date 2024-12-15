@@ -15,10 +15,11 @@ public:
 	void pushFrameTime(float frameTime);
 
 	int length;
+	float frameRate;
+	std::vector<float> frameTimes;
 
 private:
 
-	float frameRate;
-	std::vector<float> frameTimes;
+
 };
 

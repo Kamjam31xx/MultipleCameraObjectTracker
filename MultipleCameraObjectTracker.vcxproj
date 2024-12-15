@@ -26,12 +26,10 @@
     <ClCompile Include="..\..\..\..\..\ImGui\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\..\..\..\..\ImGui\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\..\..\..\..\ImGui\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="CircularBuffer.cpp" />
     <ClCompile Include="DeltaTime.cpp" />
-    <ClCompile Include="EntityManager.cpp" />
     <ClCompile Include="FrameRate.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="MultiTracker2D.cpp" />
-    <ClCompile Include="ScreenQuad.cpp" />
     <ClCompile Include="Shader.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -40,24 +38,15 @@
     <ClInclude Include="..\..\..\..\..\ImGui\imgui\backends\imgui_impl_opengl3_loader.h" />
     <ClInclude Include="..\..\..\..\..\ImGui\imgui\imgui.h" />
     <ClInclude Include="..\..\..\..\..\ImGui\imgui\imgui_internal.h" />
-    <ClInclude Include="CalibrationSettings.h" />
-    <ClInclude Include="CameraSettings.h" />
-    <ClInclude Include="CaptureSettings.h" />
+    <ClInclude Include="CircularBuffer.h" />
     <ClInclude Include="GaussNewton.h" />
     <ClInclude Include="CallbacksGLFW.h" />
     <ClInclude Include="ImgProcHelpers.h" />
     <ClInclude Include="linmath.h" />
-    <ClInclude Include="LogSettings.h" />
-    <ClInclude Include="MultiTracker2D.h" />
-    <ClInclude Include="RenderSettings.h" />
     <ClInclude Include="ScreenQuad.h" />
     <ClInclude Include="Shader.h" />
-    <ClInclude Include="TrackingSettings.h" />
-    <ClInclude Include="ImageProcessSettings.h" />
     <ClInclude Include="DeltaTime.h" />
-    <ClInclude Include="EntityManager.h" />
     <ClInclude Include="FrameRate.h" />
-    <ClInclude Include="EntityValues.h" />
     <ClInclude Include="Calibrate.h" />
     <ClInclude Include="AppSettings.h" />
     <ClInclude Include="Presets.h" />
@@ -70,7 +59,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Standard.frag" />
-    <None Include="Standard.geom" />
     <None Include="Standard.vert" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

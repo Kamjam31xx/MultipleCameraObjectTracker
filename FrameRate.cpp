@@ -16,7 +16,7 @@ float FrameRate::getRate()
 		frames += 1;
 		total += frameTime;
 	}
-
+	
 	return 1000 / (total / frames);
 }
 
